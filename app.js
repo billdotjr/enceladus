@@ -204,7 +204,9 @@ const FileManager = (() => {
       const writable = await fileHandle.createWritable();
       await writable.write(TaskStore.toJSON());
       await writable.close();
-      UI.setSaveStatus('Saved ✓');
+      const t = new Date();
+      const ts = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      UI.setSaveStatus(`Saved ✓ ${ts}`);
       document.getElementById('btn-save').disabled = true;
     } catch (e) {
       console.error(e);
@@ -601,7 +603,10 @@ const UI = (() => {
 
   function setBanner(name) {
     document.getElementById('file-banner').classList.remove('hidden');
+    // Browsers do not expose the full filesystem path via the File System
+    // Access API — only the filename is available.
     document.getElementById('file-name').textContent = name;
+    document.getElementById('file-name').title = `Full path not available in browser (filename: ${name})`;
   }
 
   function setSaveStatus(msg) {
