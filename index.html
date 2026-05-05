@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enceladus — Todo</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="theme-light">
+
+  <header class="topbar">
+    <span class="app-title">Enceladus</span>
+    <div class="topbar-actions">
+      <button id="btn-open"  class="btn btn-primary">Open file</button>
+      <button id="btn-new"   class="btn">New task</button>
+      <button id="btn-save"  class="btn" disabled>Save</button>
+      <button id="btn-theme" class="btn btn-icon" title="Toggle dark/light mode">☀</button>
+    </div>
+  </header>
+
+  <div id="file-banner" class="file-banner hidden">
+    <span id="file-name"></span>
+    <span id="save-status" class="save-status"></span>
+  </div>
+
+  <main>
+    <div class="table-wrapper">
+      <table id="task-table">
+        <thead>
+          <tr id="header-row"></tr>
+          <tr id="filter-row"></tr>
+        </thead>
+        <tbody id="task-body"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
