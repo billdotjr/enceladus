@@ -76,10 +76,10 @@ const TaskStore = (() => {
 const FileManager = (() => {
   let fileHandle = null;
   let saveTimer  = null;
-  const supported = 'showOpenFilePicker' in window;
+  const supported = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 
+  // Open an existing JSON file, load its tasks, return true on success.
   async function open() {
-    if (!supported) { importFallback(); return; }
     try {
       [fileHandle] = await window.showOpenFilePicker({
         types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
@@ -88,11 +88,33 @@ const FileManager = (() => {
       const file = await fileHandle.getFile();
       const text = await file.text();
       TaskStore.load(JSON.parse(text));
-      UI.setBanner(file.name);
+      UI.setBanner(fileHandle.name);
       UI.render();
       UI.setSaveStatus('Loaded');
+      return true;
     } catch (e) {
       if (e.name !== 'AbortError') console.error(e);
+      return false;
+    }
+  }
+
+  // Create a new empty file, return true on success.
+  async function create() {
+    try {
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: 'tasks.json',
+        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+      });
+      TaskStore.load([]);
+      // Write empty array immediately so the file is valid JSON
+      await writeToHandle();
+      UI.setBanner(fileHandle.name);
+      UI.render();
+      UI.setSaveStatus('Ready');
+      return true;
+    } catch (e) {
+      if (e.name !== 'AbortError') console.error(e);
+      return false;
     }
   }
 
@@ -100,31 +122,13 @@ const FileManager = (() => {
     clearTimeout(saveTimer);
     UI.setSaveStatus('Unsaved…');
     document.getElementById('btn-save').disabled = false;
-    // Only auto-save if the user has already picked a file to write to
     if (fileHandle) {
-      saveTimer = setTimeout(save, 500);
+      saveTimer = setTimeout(writeToHandle, 500);
     }
   }
 
-  async function save() {
-    if (!fileHandle) {
-      // First save: let the user pick a location
-      if ('showSaveFilePicker' in window) {
-        try {
-          fileHandle = await window.showSaveFilePicker({
-            suggestedName: 'tasks.json',
-            types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
-          });
-          UI.setBanner(fileHandle.name);
-        } catch (e) {
-          if (e.name !== 'AbortError') downloadFallback();
-          return;
-        }
-      } else {
-        downloadFallback();
-        return;
-      }
-    }
+  async function writeToHandle() {
+    if (!fileHandle) return;
     try {
       const writable = await fileHandle.createWritable();
       await writable.write(TaskStore.toJSON());
@@ -137,33 +141,12 @@ const FileManager = (() => {
     }
   }
 
-  function downloadFallback() {
-    const blob = new Blob([TaskStore.toJSON()], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'tasks.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    UI.setSaveStatus('Downloaded');
+  // Called by Save button — writes immediately (no debounce).
+  async function save() {
+    await writeToHandle();
   }
 
-  function importFallback() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,application/json';
-    input.onchange = async () => {
-      const file = input.files[0];
-      if (!file) return;
-      const text = await file.text();
-      TaskStore.load(JSON.parse(text));
-      UI.setBanner(file.name + ' (download-only mode)');
-      UI.render();
-      UI.setSaveStatus('Loaded');
-    };
-    input.click();
-  }
-
-  return { open, save, scheduleSave, supported };
+  return { open, create, save, scheduleSave, supported };
 })();
 
 // ── SortController ──────────────────────────────────────────────────────────
@@ -516,17 +499,43 @@ const ThemeController = (() => {
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 
-function init() {
+function dismissStartup() {
+  document.getElementById('startup-modal').classList.add('hidden');
+}
+
+async function init() {
   ThemeController.init();
+
+  if (!FileManager.supported) {
+    // API unavailable — show warning in modal and topbar, skip gating
+    document.getElementById('startup-api-warn').classList.remove('hidden');
+    document.getElementById('api-warn').classList.remove('hidden');
+    document.getElementById('btn-startup-open').disabled = true;
+    document.getElementById('btn-startup-new').disabled = true;
+    // Let them use the app in read-only / no-save mode
+    dismissStartup();
+  } else {
+    document.getElementById('btn-startup-open').addEventListener('click', async () => {
+      const ok = await FileManager.open();
+      if (ok) dismissStartup();
+    });
+    document.getElementById('btn-startup-new').addEventListener('click', async () => {
+      const ok = await FileManager.create();
+      if (ok) dismissStartup();
+    });
+  }
+
   UI.render();
 
-  document.getElementById('btn-open').addEventListener('click', () => FileManager.open());
+  // "Switch file" in topbar — open a different file
+  document.getElementById('btn-open').addEventListener('click', async () => {
+    await FileManager.open();
+  });
 
   document.getElementById('btn-new').addEventListener('click', () => {
     TaskStore.add();
     FileManager.scheduleSave();
     UI.render();
-    // scroll to last row
     const rows = document.querySelectorAll('#task-body tr:not(.empty-row)');
     if (rows.length) rows[rows.length - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
