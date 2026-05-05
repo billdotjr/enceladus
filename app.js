@@ -98,22 +98,32 @@ const FileManager = (() => {
 
   function scheduleSave() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(save, 500);
     UI.setSaveStatus('Unsaved…');
     document.getElementById('btn-save').disabled = false;
+    // Only auto-save if the user has already picked a file to write to
+    if (fileHandle) {
+      saveTimer = setTimeout(save, 500);
+    }
   }
 
   async function save() {
-    if (!supported || !fileHandle) {
-      // fallback: download
-      const blob = new Blob([TaskStore.toJSON()], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'tasks.json';
-      a.click();
-      URL.revokeObjectURL(a.href);
-      UI.setSaveStatus('Downloaded');
-      return;
+    if (!fileHandle) {
+      // First save: let the user pick a location
+      if ('showSaveFilePicker' in window) {
+        try {
+          fileHandle = await window.showSaveFilePicker({
+            suggestedName: 'tasks.json',
+            types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+          });
+          UI.setBanner(fileHandle.name);
+        } catch (e) {
+          if (e.name !== 'AbortError') downloadFallback();
+          return;
+        }
+      } else {
+        downloadFallback();
+        return;
+      }
     }
     try {
       const writable = await fileHandle.createWritable();
@@ -125,6 +135,16 @@ const FileManager = (() => {
       console.error(e);
       UI.setSaveStatus('Save failed');
     }
+  }
+
+  function downloadFallback() {
+    const blob = new Blob([TaskStore.toJSON()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'tasks.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    UI.setSaveStatus('Downloaded');
   }
 
   function importFallback() {
