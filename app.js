@@ -14,7 +14,7 @@ const COLUMNS = [
   { key: 'description',    label: 'Description',  type: 'text',         sortable: false },
   { key: 'nextAction',     label: 'Next action',  type: 'text',         sortable: false },
   { key: 'contact',        label: 'Contact',      type: 'text',         sortable: true  },
-  { key: 'tag',            label: 'Tag',          type: 'tag',          sortable: true  },
+  { key: 'labels',         label: 'Label',        type: 'labels',       sortable: false },
   { key: 'status',         label: 'Status',       type: 'status',       sortable: true  },
 ];
 
@@ -35,13 +35,21 @@ const TaskStore = (() => {
       description: '',
       nextAction: '',
       contact: '',
-      tag: '',
+      labels: [],
       status: 'New',
     };
   }
 
   function load(data) {
-    tasks = data.map(t => ({ ...t }));
+    tasks = data.map(t => {
+      const task = { ...t };
+      // Migrate old single-string tag field to labels array
+      if (!Array.isArray(task.labels)) {
+        task.labels = task.tag ? [task.tag] : [];
+        delete task.tag;
+      }
+      return task;
+    });
     nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
   }
 
@@ -62,13 +70,13 @@ const TaskStore = (() => {
 
   function getAll()  { return tasks; }
 
-  function allTags() {
-    return [...new Set(tasks.map(t => t.tag).filter(Boolean))].sort();
+  function allLabels() {
+    return [...new Set(tasks.flatMap(t => t.labels || []).filter(Boolean))].sort();
   }
 
   function toJSON() { return JSON.stringify(tasks, null, 2); }
 
-  return { load, add, remove, update, getAll, allTags, toJSON };
+  return { load, add, remove, update, getAll, allLabels, toJSON };
 })();
 
 // ── FileManager ─────────────────────────────────────────────────────────────
@@ -227,8 +235,18 @@ function priorityColor(pct) {
 }
 
 function textOnColor(pct) {
-  // always white or near-white text looks fine across this palette
   return '#ffffff';
+}
+
+// ── Label colour (DJB2 hash → HSL) ─────────────────────────────────────────
+
+function labelColor(text) {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) {
+    h = ((h << 5) + h) ^ text.charCodeAt(i);
+    h |= 0;
+  }
+  return `hsl(${Math.abs(h) % 360}, 58%, 38%)`;
 }
 
 // ── UI ──────────────────────────────────────────────────────────────────────
@@ -288,8 +306,8 @@ const UI = (() => {
         inp.type = 'search';
         inp.placeholder = col.label;
         inp.value = FilterController.get(col.key);
-        if (col.type === 'tag') {
-          inp.setAttribute('list', 'tag-datalist');
+        if (col.type === 'labels') {
+          inp.setAttribute('list', 'labels-datalist');
         }
         inp.addEventListener('input', e => {
           FilterController.set(col.key, e.target.value);
@@ -301,17 +319,17 @@ const UI = (() => {
     }
     // spacer for delete column
     row.appendChild(document.createElement('th'));
-    refreshTagDatalist();
+    refreshLabelDatalist();
   }
 
-  function refreshTagDatalist() {
-    let dl = document.getElementById('tag-datalist');
+  function refreshLabelDatalist() {
+    let dl = document.getElementById('labels-datalist');
     if (!dl) {
       dl = document.createElement('datalist');
-      dl.id = 'tag-datalist';
+      dl.id = 'labels-datalist';
       document.body.appendChild(dl);
     }
-    dl.innerHTML = TaskStore.allTags().map(t => `<option value="${t}">`).join('');
+    dl.innerHTML = TaskStore.allLabels().map(l => `<option value="${l}">`).join('');
   }
 
   function renderRows(tasks) {
@@ -385,18 +403,69 @@ const UI = (() => {
             break;
           }
 
-          case 'tag': {
+          case 'labels': {
+            td.className = 'cell-labels';
+            const wrap = document.createElement('div');
+            wrap.className = 'label-cell';
+
+            const getLabels = () => {
+              const t = TaskStore.getAll().find(x => x.uuid === task.uuid);
+              return t ? (t.labels || []) : [];
+            };
+
             const inp = document.createElement('input');
             inp.type = 'text';
-            inp.className = 'cell-input';
-            inp.value = task[col.key] || '';
-            inp.setAttribute('list', 'tag-datalist');
-            inp.addEventListener('change', e => {
-              TaskStore.update(task.uuid, col.key, e.target.value.trim());
-              refreshTagDatalist();
-              FileManager.scheduleSave();
+            inp.className = 'label-input';
+            inp.placeholder = '+';
+            inp.setAttribute('list', 'labels-datalist');
+
+            const renderChips = () => {
+              wrap.querySelectorAll('.label-chip').forEach(c => c.remove());
+              getLabels().forEach(lbl => {
+                const chip = document.createElement('span');
+                chip.className = 'label-chip';
+                chip.style.background = labelColor(lbl);
+                const txt = document.createElement('span');
+                txt.textContent = lbl;
+                chip.appendChild(txt);
+                const x = document.createElement('button');
+                x.className = 'label-chip-x';
+                x.textContent = '×';
+                x.addEventListener('click', () => {
+                  TaskStore.update(task.uuid, 'labels', getLabels().filter(l => l !== lbl));
+                  FileManager.scheduleSave();
+                  renderChips();
+                  refreshLabelDatalist();
+                });
+                chip.appendChild(x);
+                wrap.insertBefore(chip, inp);
+              });
+            };
+
+            const commit = () => {
+              const val = inp.value.replace(/[,;]/g, '').trim();
+              if (val && !getLabels().includes(val)) {
+                TaskStore.update(task.uuid, 'labels', [...getLabels(), val]);
+                FileManager.scheduleSave();
+                refreshLabelDatalist();
+              }
+              inp.value = '';
+              renderChips();
+            };
+
+            inp.addEventListener('keydown', e => {
+              if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
+                e.preventDefault();
+                commit();
+              }
             });
-            td.appendChild(inp);
+            inp.addEventListener('input', () => {
+              if (inp.value.endsWith(',') || inp.value.endsWith(';')) commit();
+            });
+
+            wrap.appendChild(inp);
+            renderChips();
+            td.appendChild(wrap);
             break;
           }
 
