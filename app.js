@@ -3,7 +3,16 @@
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const STATUSES = ['New', 'In Progress', 'Pending feedback', 'Done'];
+const STATUSES = ['New', 'In Progress', 'Today', 'Pending feedback', 'On-Hold', 'Closed'];
+
+const STATUS_STYLE = {
+  'New':              { bg: '#d97706', text: '#fff' },  // amber
+  'In Progress':      { bg: '#15803d', text: '#fff' },  // dark green
+  'Today':            { bg: '#2563eb', text: '#fff' },  // bright blue
+  'Pending feedback': { bg: '#7c3aed', text: '#fff' },  // dim purple
+  'On-Hold':          { bg: '#9ca3af', text: '#1a1a1a' }, // mid grey
+  'Closed':           { bg: '#4b5563', text: '#d1d5db' }, // dark grey
+};
 
 const COLUMNS = [
   { key: 'id',             label: '#',            type: 'readonly',     sortable: true  },
@@ -48,6 +57,8 @@ const TaskStore = (() => {
         task.labels = task.tag ? [task.tag] : [];
         delete task.tag;
       }
+      // Migrate old "Done" status to "Closed"
+      if (task.status === 'Done') task.status = 'Closed';
       return task;
     });
     nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
@@ -283,7 +294,7 @@ const SortController = (() => {
 // ── FilterController ────────────────────────────────────────────────────────
 
 const FilterController = (() => {
-  let filters = {};
+  let filters = { status: '!closed' }; // default: hide Closed
 
   function set(key, value) { filters[key] = value.toLowerCase(); }
 
@@ -291,7 +302,9 @@ const FilterController = (() => {
     return tasks.filter(task =>
       Object.entries(filters).every(([k, v]) => {
         if (!v) return true;
-        return String(task[k] ?? '').toLowerCase().includes(v);
+        const cell = String(task[k] ?? '').toLowerCase();
+        if (v.startsWith('!')) return cell !== v.slice(1);
+        return cell.includes(v);
       })
     );
   }
@@ -416,10 +429,17 @@ const UI = (() => {
 
         case 'status': {
           td.className = 'cell-status';
+          const applyDraftStatus = s => {
+            const st = STATUS_STYLE[s] || STATUS_STYLE['New'];
+            td.style.background = st.bg;
+            td.style.color = st.text;
+          };
+          applyDraftStatus(draft.status);
           const sel = document.createElement('select');
           sel.className = 'cell-select';
+          sel.style.cssText = 'background:transparent;color:inherit;font-weight:600;';
           sel.innerHTML = STATUSES.map(s => `<option value="${s}"${draft.status === s ? ' selected' : ''}>${s}</option>`).join('');
-          sel.addEventListener('change', e => { draft.status = e.target.value; });
+          sel.addEventListener('change', e => { draft.status = e.target.value; applyDraftStatus(e.target.value); });
           td.appendChild(sel);
           break;
         }
@@ -500,6 +520,7 @@ const UI = (() => {
       if (col.type === 'status') {
         const sel = document.createElement('select');
         sel.innerHTML = `<option value="">All</option>` +
+          `<option value="!closed">Active (hide Closed)</option>` +
           STATUSES.map(s => `<option value="${s.toLowerCase()}">${s}</option>`).join('');
         sel.value = FilterController.get(col.key);
         sel.addEventListener('change', e => {
@@ -683,12 +704,20 @@ const UI = (() => {
 
           case 'status': {
             td.className = 'cell-status';
+            const applyStatusStyle = s => {
+              const st = STATUS_STYLE[s] || STATUS_STYLE['New'];
+              td.style.background = st.bg;
+              td.style.color = st.text;
+            };
+            applyStatusStyle(task.status);
             const sel = document.createElement('select');
             sel.className = 'cell-select';
+            sel.style.cssText = 'background:transparent;color:inherit;font-weight:600;';
             sel.innerHTML = STATUSES.map(s =>
               `<option value="${s}"${task.status === s ? ' selected' : ''}>${s}</option>`
             ).join('');
             sel.addEventListener('change', e => {
+              applyStatusStyle(e.target.value);
               TaskStore.update(task.uuid, 'status', e.target.value);
               FileManager.scheduleSave();
             });
