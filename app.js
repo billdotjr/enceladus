@@ -79,6 +79,44 @@ const TaskStore = (() => {
   return { load, add, remove, update, getAll, allLabels, toJSON };
 })();
 
+// ── IDB handle store ────────────────────────────────────────────────────────
+// FileSystemFileHandle objects can be persisted in IndexedDB (not JSON).
+
+const HandleStore = (() => {
+  const DB = 'enceladus-db', STORE = 'handles', KEY = 'last';
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB, 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore(STORE);
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror  = e => reject(e.target.error);
+    });
+  }
+
+  async function save(handle) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(handle, KEY);
+      tx.oncomplete = resolve;
+      tx.onerror    = e => reject(e.target.error);
+    });
+  }
+
+  async function load() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).get(KEY);
+      req.onsuccess = e => resolve(e.target.result ?? null);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  return { save, load };
+})();
+
 // ── FileManager ─────────────────────────────────────────────────────────────
 
 const FileManager = (() => {
@@ -86,19 +124,25 @@ const FileManager = (() => {
   let saveTimer  = null;
   const supported = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 
+  async function loadHandle(handle) {
+    const file = await handle.getFile();
+    const text = await file.text();
+    TaskStore.load(JSON.parse(text));
+    fileHandle = handle;
+    UI.setBanner(handle.name);
+    UI.render();
+    UI.setSaveStatus('Loaded');
+    HandleStore.save(handle);
+  }
+
   // Open an existing JSON file, load its tasks, return true on success.
   async function open() {
     try {
-      [fileHandle] = await window.showOpenFilePicker({
+      const [handle] = await window.showOpenFilePicker({
         types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
         multiple: false,
       });
-      const file = await fileHandle.getFile();
-      const text = await file.text();
-      TaskStore.load(JSON.parse(text));
-      UI.setBanner(fileHandle.name);
-      UI.render();
-      UI.setSaveStatus('Loaded');
+      await loadHandle(handle);
       return true;
     } catch (e) {
       if (e.name !== 'AbortError') console.error(e);
@@ -109,19 +153,38 @@ const FileManager = (() => {
   // Create a new empty file, return true on success.
   async function create() {
     try {
-      fileHandle = await window.showSaveFilePicker({
+      const handle = await window.showSaveFilePicker({
         suggestedName: 'tasks.json',
         types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
       });
+      fileHandle = handle;
       TaskStore.load([]);
-      // Write empty array immediately so the file is valid JSON
       await writeToHandle();
-      UI.setBanner(fileHandle.name);
+      UI.setBanner(handle.name);
       UI.render();
       UI.setSaveStatus('Ready');
+      HandleStore.save(handle);
       return true;
     } catch (e) {
       if (e.name !== 'AbortError') console.error(e);
+      return false;
+    }
+  }
+
+  // Reopen a persisted handle — requires a user gesture for requestPermission.
+  async function reopen(handle) {
+    try {
+      const perm = await handle.queryPermission({ mode: 'readwrite' });
+      if (perm === 'prompt') {
+        const granted = await handle.requestPermission({ mode: 'readwrite' });
+        if (granted !== 'granted') return false;
+      } else if (perm !== 'granted') {
+        return false;
+      }
+      await loadHandle(handle);
+      return true;
+    } catch (e) {
+      console.error(e);
       return false;
     }
   }
@@ -154,7 +217,7 @@ const FileManager = (() => {
     await writeToHandle();
   }
 
-  return { open, create, save, scheduleSave, supported };
+  return { open, create, reopen, save, scheduleSave, supported };
 })();
 
 // ── SortController ──────────────────────────────────────────────────────────
@@ -582,14 +645,25 @@ async function init() {
   ThemeController.init();
 
   if (!FileManager.supported) {
-    // API unavailable — show warning in modal and topbar, skip gating
     document.getElementById('startup-api-warn').classList.remove('hidden');
     document.getElementById('api-warn').classList.remove('hidden');
     document.getElementById('btn-startup-open').disabled = true;
     document.getElementById('btn-startup-new').disabled = true;
-    // Let them use the app in read-only / no-save mode
     dismissStartup();
   } else {
+    // Check for a previously used file handle in IDB
+    const lastHandle = await HandleStore.load().catch(() => null);
+    if (lastHandle) {
+      const btn = document.getElementById('btn-startup-reopen');
+      btn.textContent = `Reopen "${lastHandle.name}"`;
+      btn.classList.remove('hidden');
+      document.getElementById('startup-divider').classList.remove('hidden');
+      btn.addEventListener('click', async () => {
+        const ok = await FileManager.reopen(lastHandle);
+        if (ok) dismissStartup();
+      });
+    }
+
     document.getElementById('btn-startup-open').addEventListener('click', async () => {
       const ok = await FileManager.open();
       if (ok) dismissStartup();
