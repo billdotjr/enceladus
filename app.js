@@ -27,6 +27,14 @@ const COLUMNS = [
   { key: 'status',         label: 'Status',       type: 'status',       sortable: true  },
 ];
 
+// Pre-built option HTML with per-status colors (used in every status select)
+function statusOptionsHTML(selected) {
+  return STATUSES.map(s => {
+    const st = STATUS_STYLE[s];
+    return `<option value="${s}" style="background:${st.bg};color:${st.text}"${s === selected ? ' selected' : ''}>${s}</option>`;
+  }).join('');
+}
+
 // ── TaskStore ───────────────────────────────────────────────────────────────
 
 const TaskStore = (() => {
@@ -438,7 +446,7 @@ const UI = (() => {
           const sel = document.createElement('select');
           sel.className = 'cell-select';
           sel.style.cssText = 'background:transparent;color:inherit;font-weight:600;';
-          sel.innerHTML = STATUSES.map(s => `<option value="${s}"${draft.status === s ? ' selected' : ''}>${s}</option>`).join('');
+          sel.innerHTML = statusOptionsHTML(draft.status);
           sel.addEventListener('change', e => { draft.status = e.target.value; applyDraftStatus(e.target.value); });
           td.appendChild(sel);
           break;
@@ -713,9 +721,7 @@ const UI = (() => {
             const sel = document.createElement('select');
             sel.className = 'cell-select';
             sel.style.cssText = 'background:transparent;color:inherit;font-weight:600;';
-            sel.innerHTML = STATUSES.map(s =>
-              `<option value="${s}"${task.status === s ? ' selected' : ''}>${s}</option>`
-            ).join('');
+            sel.innerHTML = statusOptionsHTML(task.status);
             sel.addEventListener('change', e => {
               applyStatusStyle(e.target.value);
               TaskStore.update(task.uuid, 'status', e.target.value);
