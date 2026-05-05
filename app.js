@@ -462,6 +462,7 @@ const UI = (() => {
             inp.addEventListener('input', () => {
               if (inp.value.endsWith(',') || inp.value.endsWith(';')) commit();
             });
+            inp.addEventListener('change', () => commit());
 
             wrap.appendChild(inp);
             renderChips();
