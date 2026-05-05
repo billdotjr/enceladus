@@ -120,9 +120,30 @@ const HandleStore = (() => {
 // ── FileManager ─────────────────────────────────────────────────────────────
 
 const FileManager = (() => {
-  let fileHandle = null;
-  let saveTimer  = null;
-  const supported = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+  let fileHandle   = null;
+  let saveTimer    = null;
+  let lastSaveTime = null;
+  let agoTimer     = null;
+  const supported  = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+
+  function formatSaveStatus(date) {
+    const now    = new Date();
+    const today  = date.toDateString() === now.toDateString();
+    const timePart = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const label  = today ? timePart : `${date.toLocaleDateString()} ${timePart}`;
+
+    const sec  = Math.floor((now - date) / 1000);
+    const min  = Math.floor(sec  / 60);
+    const hr   = Math.floor(min  / 60);
+    const days = Math.floor(hr   / 24);
+    const ago  = sec < 10  ? 'just now'
+               : sec < 60  ? `${sec}s ago`
+               : min < 60  ? `${min}m ago`
+               : hr  < 24  ? `${hr}h ago`
+               :              `${days}d ago`;
+
+    return `Saved ✓ ${label} (${ago})`;
+  }
 
   async function loadHandle(handle) {
     const file = await handle.getFile();
@@ -204,9 +225,10 @@ const FileManager = (() => {
       const writable = await fileHandle.createWritable();
       await writable.write(TaskStore.toJSON());
       await writable.close();
-      const t = new Date();
-      const ts = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      UI.setSaveStatus(`Saved ✓ ${ts}`);
+      lastSaveTime = new Date();
+      clearInterval(agoTimer);
+      UI.setSaveStatus(formatSaveStatus(lastSaveTime));
+      agoTimer = setInterval(() => UI.setSaveStatus(formatSaveStatus(lastSaveTime)), 30_000);
       document.getElementById('btn-save').disabled = true;
     } catch (e) {
       console.error(e);
