@@ -17,6 +17,7 @@
   --bg-filter:  #f0f0f0;
   --bg-row-alt: #fafafa;
   --bg-row-hover: #eef4ff;
+  --bg-draft:   #f0f7e6;
   --border:     #d0d0d0;
   --text:       #1a1a1a;
   --text-muted: #666666;
@@ -36,6 +37,7 @@
   --bg-filter:  #222222;
   --bg-row-alt: #1a1a1a;
   --bg-row-hover: #1e2a3a;
+  --bg-draft:   #1a2a18;
   --border:     #333333;
   --text:       #e8e8e8;
   --text-muted: #888888;
@@ -289,6 +291,40 @@ td.cell-del {
 .table-wrapper::-webkit-scrollbar { height: 6px; }
 .table-wrapper::-webkit-scrollbar-track { background: var(--bg); }
 .table-wrapper::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Draft row ────────────────────────────────────────────── */
+tbody tr.draft-row {
+  background: var(--bg-draft) !important;
+}
+tbody tr.draft-row td {
+  border-top: 1px dashed var(--accent);
+  border-bottom: 1px dashed var(--accent);
+  opacity: 0.85;
+}
+tbody tr.draft-row:focus-within td {
+  opacity: 1;
+}
+tbody tr.draft-row td:first-child {
+  border-left: 3px solid var(--accent);
+}
+td.draft-id {
+  color: var(--accent);
+  font-size: 15px;
+  text-align: center;
+  font-weight: 700;
+}
+/* Placeholder text for empty contenteditable cells in draft row */
+.draft-row td[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  font-style: italic;
+  pointer-events: none;
+}
+.btn-draft-commit {
+  color: var(--accent);
+  font-size: 18px;
+}
+.btn-draft-commit:hover { color: var(--accent-hover); }
 
 /* ── Label chips ──────────────────────────────────────────── */
 td.cell-labels { padding: 3px 4px; overflow: visible; white-space: normal; }

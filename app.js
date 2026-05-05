@@ -53,8 +53,8 @@ const TaskStore = (() => {
     nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
   }
 
-  function add() {
-    const t = newTask();
+  function add(overrides = {}) {
+    const t = { ...newTask(), ...overrides };
     tasks.push(t);
     return t;
   }
@@ -247,8 +247,8 @@ const FileManager = (() => {
 // ── SortController ──────────────────────────────────────────────────────────
 
 const SortController = (() => {
-  let sortKey = null;
-  let sortDir = 1; // 1 asc, -1 desc
+  let sortKey = 'id';
+  let sortDir = -1; // default: newest first
 
   function toggle(key) {
     if (sortKey === key) {
@@ -339,6 +339,125 @@ function labelColor(text) {
 // ── UI ──────────────────────────────────────────────────────────────────────
 
 const UI = (() => {
+  // ── Draft row (new task input) ────────────────────────────────────────────
+  const DRAFT_DEFAULTS = () => ({ priority: 50, dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
+  let draft = DRAFT_DEFAULTS();
+
+  function commitDraft() {
+    if (!draft.name.trim()) return;
+    TaskStore.add({ ...draft, labels: [...draft.labels] });
+    FileManager.scheduleSave();
+    draft = DRAFT_DEFAULTS();
+    render();
+  }
+
+  function buildDraftRow() {
+    const tr = document.createElement('tr');
+    tr.className = 'draft-row';
+
+    // Commit when focus leaves the entire row (tab-between-cells safe)
+    let blurTimer = null;
+    tr.addEventListener('focusout', () => {
+      blurTimer = setTimeout(() => {
+        if (!tr.contains(document.activeElement)) commitDraft();
+      }, 150);
+    });
+    tr.addEventListener('focusin', () => clearTimeout(blurTimer));
+
+    for (const col of COLUMNS) {
+      const td = document.createElement('td');
+
+      switch (col.type) {
+        case 'readonly':
+          td.className = 'cell-id draft-id';
+          td.textContent = '+';
+          break;
+
+        case 'priority': {
+          td.className = 'cell-priority';
+          td.style.background = priorityColor(draft.priority);
+          td.style.color = '#fff';
+          const inp = document.createElement('input');
+          inp.type = 'number'; inp.min = 0; inp.max = 100;
+          inp.className = 'cell-input';
+          inp.value = draft.priority;
+          inp.style.cssText = 'background:transparent;color:inherit;font-weight:inherit;width:100%;text-align:center;';
+          inp.addEventListener('input', e => {
+            const v = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+            draft.priority = v;
+            td.style.background = priorityColor(v);
+          });
+          td.appendChild(inp);
+          break;
+        }
+
+        case 'date': {
+          const inp = document.createElement('input');
+          inp.type = 'date'; inp.className = 'cell-input';
+          inp.value = draft[col.key] || '';
+          inp.addEventListener('change', e => { draft[col.key] = e.target.value; });
+          td.appendChild(inp);
+          break;
+        }
+
+        case 'labels': {
+          td.className = 'cell-labels';
+          const inp = document.createElement('input');
+          inp.type = 'text'; inp.className = 'cell-input';
+          inp.placeholder = 'Labels…';
+          inp.setAttribute('list', 'labels-datalist');
+          inp.value = draft.labels.join(', ');
+          inp.addEventListener('change', e => {
+            draft.labels = e.target.value.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+          });
+          td.appendChild(inp);
+          break;
+        }
+
+        case 'status': {
+          td.className = 'cell-status';
+          const sel = document.createElement('select');
+          sel.className = 'cell-select';
+          sel.innerHTML = STATUSES.map(s => `<option value="${s}"${draft.status === s ? ' selected' : ''}>${s}</option>`).join('');
+          sel.addEventListener('change', e => { draft.status = e.target.value; });
+          td.appendChild(sel);
+          break;
+        }
+
+        default: { // text
+          td.contentEditable = 'true';
+          td.textContent = draft[col.key] || '';
+          td.dataset.placeholder = col.label + '…';
+          td.addEventListener('input', e => { draft[col.key] = e.target.textContent; });
+          td.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitDraft(); }
+          });
+          break;
+        }
+      }
+      tr.appendChild(td);
+    }
+
+    // Commit button (prevents blur so typing isn't lost)
+    const tdAct = document.createElement('td');
+    tdAct.className = 'cell-del';
+    const btnAdd = document.createElement('button');
+    btnAdd.className = 'btn-del btn-draft-commit';
+    btnAdd.title = 'Add task (Enter)';
+    btnAdd.textContent = '＋';
+    btnAdd.addEventListener('mousedown', e => e.preventDefault());
+    btnAdd.addEventListener('click', commitDraft);
+    tdAct.appendChild(btnAdd);
+    tr.appendChild(tdAct);
+
+    return tr;
+  }
+
+  function focusDraftName() {
+    const cell = document.querySelector('.draft-row td[data-placeholder="Name…"]');
+    if (cell) cell.focus();
+  }
+
   // Build colgroup once
   function buildColgroup() {
     let cg = '<colgroup>';
@@ -419,9 +538,14 @@ const UI = (() => {
     dl.innerHTML = TaskStore.allLabels().map(l => `<option value="${l}">`).join('');
   }
 
-  function renderRows(tasks) {
+  function renderRows(tasks, preserveDraft = false) {
     const tbody = document.getElementById('task-body');
-    tbody.innerHTML = '';
+    if (preserveDraft) {
+      tbody.querySelectorAll('tr:not(.draft-row)').forEach(r => r.remove());
+    } else {
+      tbody.innerHTML = '';
+      tbody.appendChild(buildDraftRow());
+    }
 
     if (tasks.length === 0) {
       const tr = document.createElement('tr');
@@ -612,7 +736,7 @@ const UI = (() => {
 
   function renderBody() {
     const filtered = FilterController.apply(SortController.apply(TaskStore.getAll()));
-    renderRows(filtered);
+    renderRows(filtered, true); // preserve draft row so it keeps focus
   }
 
   function render() {
@@ -635,7 +759,7 @@ const UI = (() => {
     document.getElementById('save-status').textContent = msg;
   }
 
-  return { render, renderBody, setBanner, setSaveStatus };
+  return { render, renderBody, setBanner, setSaveStatus, focusDraftName };
 })();
 
 // ── ThemeController ─────────────────────────────────────────────────────────
@@ -709,11 +833,8 @@ async function init() {
   });
 
   document.getElementById('btn-new').addEventListener('click', () => {
-    TaskStore.add();
-    FileManager.scheduleSave();
-    UI.render();
-    const rows = document.querySelectorAll('#task-body tr:not(.empty-row)');
-    if (rows.length) rows[rows.length - 1].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.querySelector('.draft-row')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    UI.focusDraftName();
   });
 
   document.getElementById('btn-save').addEventListener('click', () => FileManager.save());
