@@ -280,7 +280,7 @@ const UI = (() => {
         sel.value = FilterController.get(col.key);
         sel.addEventListener('change', e => {
           FilterController.set(col.key, e.target.value);
-          render();
+          renderBody();
         });
         th.appendChild(sel);
       } else {
@@ -293,7 +293,7 @@ const UI = (() => {
         }
         inp.addEventListener('input', e => {
           FilterController.set(col.key, e.target.value);
-          render();
+          renderBody();
         });
         th.appendChild(inp);
       }
@@ -453,6 +453,11 @@ const UI = (() => {
     }
   }
 
+  function renderBody() {
+    const filtered = FilterController.apply(SortController.apply(TaskStore.getAll()));
+    renderRows(filtered);
+  }
+
   function render() {
     buildColgroup();
     buildHeaders();
@@ -470,7 +475,7 @@ const UI = (() => {
     document.getElementById('save-status').textContent = msg;
   }
 
-  return { render, setBanner, setSaveStatus };
+  return { render, renderBody, setBanner, setSaveStatus };
 })();
 
 // ── ThemeController ─────────────────────────────────────────────────────────
