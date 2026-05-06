@@ -663,6 +663,13 @@ const UI = (() => {
       return;
     }
 
+    // Relative priority heatmap — scale to visible set
+    const priorities = tasks.map(t => t.priority || 1);
+    const minP = Math.min(...priorities);
+    const maxP = Math.max(...priorities);
+    const prioSpan = maxP > minP ? maxP - minP : 1;
+    const prioT = val => (val - minP) / prioSpan;
+
     for (const task of tasks) {
       const tr = document.createElement('tr');
       tr.dataset.uuid = task.uuid;
@@ -695,13 +702,11 @@ const UI = (() => {
             });
             selI.addEventListener('change', e => {
               const newImpact = Number(e.target.value);
-              td.style.background = impactColor(newImpact);
               TaskStore.update(task.uuid, 'impact', newImpact);
-              const newPriority = newImpact * (TaskStore.getAll().find(t => t.uuid === task.uuid)?.urgency || 1);
-              TaskStore.update(task.uuid, 'priority', newPriority);
-              const pTd = tr.querySelector('[data-key="priority"]');
-              if (pTd) { pTd.textContent = newPriority; pTd.style.background = priorityColor(newPriority); }
+              const cur = TaskStore.getAll().find(t => t.uuid === task.uuid);
+              TaskStore.update(task.uuid, 'priority', newImpact * (cur?.urgency || 1));
               FileManager.scheduleSave();
+              renderBody();
             });
             td.appendChild(selI);
             break;
@@ -724,13 +729,11 @@ const UI = (() => {
             }
             selU.addEventListener('change', e => {
               const newUrgency = Number(e.target.value);
-              td.style.background = urgencyColor(newUrgency);
               TaskStore.update(task.uuid, 'urgency', newUrgency);
-              const newPriority = (TaskStore.getAll().find(t => t.uuid === task.uuid)?.impact || 1) * newUrgency;
-              TaskStore.update(task.uuid, 'priority', newPriority);
-              const pTd = tr.querySelector('[data-key="priority"]');
-              if (pTd) { pTd.textContent = newPriority; pTd.style.background = priorityColor(newPriority); }
+              const cur = TaskStore.getAll().find(t => t.uuid === task.uuid);
+              TaskStore.update(task.uuid, 'priority', (cur?.impact || 1) * newUrgency);
               FileManager.scheduleSave();
+              renderBody();
             });
             td.appendChild(selU);
             break;
@@ -740,7 +743,7 @@ const UI = (() => {
             td.className = 'cell-priority';
             const p = task.priority || 1;
             td.textContent = p;
-            td.style.background = priorityColor(p);
+            td.style.background = heatRgb(prioT(p));
             td.style.color = '#fff';
             break;
           }
