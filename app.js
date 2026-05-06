@@ -16,6 +16,8 @@ const STATUS_STYLE = {
 
 const COLUMNS = [
   { key: 'id',             label: '#',              type: 'readonly',  sortable: true  },
+  { key: 'impact',         label: 'Impact',         type: 'impact',    sortable: true  },
+  { key: 'urgency',        label: 'Urgency',        type: 'urgency',   sortable: true  },
   { key: 'priority',       label: 'Priority',       type: 'priority',  sortable: true  },
   { key: 'createdAt',      label: 'Created',        type: 'date',      sortable: true  },
   { key: 'dueDate',        label: 'Due',            type: 'date',      sortable: true  },
@@ -27,6 +29,9 @@ const COLUMNS = [
   { key: 'labels',         label: 'Label',          type: 'labels',    sortable: false },
   { key: 'status',         label: 'Status',         type: 'status',    sortable: true  },
 ];
+
+const IMPACT_VALUES = [1, 2, 4, 8, 16, 32, 64, 128];
+const MAX_PRIORITY  = 128 * 10; // 1280
 
 // Pre-built option HTML with per-status colors (used in every status select)
 function statusOptionsHTML(selected) {
@@ -46,7 +51,9 @@ const TaskStore = (() => {
     return {
       uuid: crypto.randomUUID(),
       id: nextId++,
-      priority: 50,
+      impact: 1,
+      urgency: 5,
+      priority: 5,
       createdAt: new Date().toISOString().slice(0, 10),
       dueDate: '',
       nextActionDate: '',
@@ -72,6 +79,10 @@ const TaskStore = (() => {
       // Migrate missing createdAt; truncate old ISO datetime to date
       if (!task.createdAt) task.createdAt = '';
       else if (task.createdAt.length > 10) task.createdAt = task.createdAt.slice(0, 10);
+      // Migrate to impact/urgency model
+      if (task.impact === undefined) task.impact = 1;
+      if (task.urgency === undefined) task.urgency = 5;
+      task.priority = task.impact * task.urgency;
       return task;
     });
     nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
@@ -327,29 +338,29 @@ const FilterController = (() => {
   return { set, apply, get };
 })();
 
-// ── Priority heatmap colour ─────────────────────────────────────────────────
+// ── Heatmap colours ─────────────────────────────────────────────────────────
+// t in [0,1]: 0 = green, 0.5 = amber, 1 = red
 
-function priorityColor(pct) {
-  const p = Math.min(100, Math.max(0, Number(pct) || 0));
-  // 0 → green (#4caf50), 50 → orange (#ff9800), 100 → red (#f44336)
+function heatColor(t) {
+  t = Math.min(1, Math.max(0, t));
   let r, g, b;
-  if (p <= 50) {
-    const t = p / 50;
-    r = Math.round(76  + t * (255 - 76));
-    g = Math.round(175 + t * (152 - 175));
-    b = Math.round(80  + t * (0   - 80));
+  if (t <= 0.5) {
+    const s = t / 0.5;
+    r = Math.round(76  + s * (255 - 76));
+    g = Math.round(175 + s * (152 - 175));
+    b = Math.round(80  + s * (0   - 80));
   } else {
-    const t = (p - 50) / 50;
-    r = Math.round(255 + t * (244 - 255));
-    g = Math.round(152 + t * (67  - 152));
-    b = Math.round(0   + t * (54  - 0));
+    const s = (t - 0.5) / 0.5;
+    r = Math.round(255 + s * (244 - 255));
+    g = Math.round(152 + s * (67  - 152));
+    b = Math.round(0   + s * (54  - 0));
   }
   return `rgb(${r},${g},${b})`;
 }
 
-function textOnColor(pct) {
-  return '#ffffff';
-}
+function impactColor(val)   { return heatColor(Math.log2(Math.max(1, val)) / 7); }
+function urgencyColor(val)  { return heatColor((Math.max(1, Math.min(10, val)) - 1) / 9); }
+function priorityColor(val) { return heatColor((val - 1) / (MAX_PRIORITY - 1)); }
 
 // ── Label colour (DJB2 hash → HSL) ─────────────────────────────────────────
 
@@ -366,7 +377,7 @@ function labelColor(text) {
 
 const UI = (() => {
   // ── Draft row (new task input) ────────────────────────────────────────────
-  const DRAFT_DEFAULTS = () => ({ priority: 50, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
+  const DRAFT_DEFAULTS = () => ({ impact: 1, urgency: 5, priority: 5, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
   let draft = DRAFT_DEFAULTS();
 
   function commitDraft() {
@@ -390,6 +401,14 @@ const UI = (() => {
     });
     tr.addEventListener('focusin', () => clearTimeout(blurTimer));
 
+    let draftPriorityTd = null;
+    const refreshDraftPriority = () => {
+      if (draftPriorityTd) {
+        draftPriorityTd.textContent = draft.priority;
+        draftPriorityTd.style.background = priorityColor(draft.priority);
+      }
+    };
+
     for (const col of COLUMNS) {
       const td = document.createElement('td');
       td.dataset.key = col.key;
@@ -400,21 +419,58 @@ const UI = (() => {
           td.textContent = '+';
           break;
 
+        case 'impact': {
+          td.className = 'cell-impact';
+          td.style.background = impactColor(draft.impact);
+          td.style.color = '#fff';
+          const sel = document.createElement('select');
+          sel.className = 'cell-select';
+          sel.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
+          IMPACT_VALUES.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v; opt.textContent = v;
+            if (v === draft.impact) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          sel.addEventListener('change', e => {
+            draft.impact = Number(e.target.value);
+            draft.priority = draft.impact * draft.urgency;
+            td.style.background = impactColor(draft.impact);
+            refreshDraftPriority();
+          });
+          td.appendChild(sel);
+          break;
+        }
+
+        case 'urgency': {
+          td.className = 'cell-urgency';
+          td.style.background = urgencyColor(draft.urgency);
+          td.style.color = '#fff';
+          const sel = document.createElement('select');
+          sel.className = 'cell-select';
+          sel.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
+          for (let v = 1; v <= 10; v++) {
+            const opt = document.createElement('option');
+            opt.value = v; opt.textContent = v;
+            if (v === draft.urgency) opt.selected = true;
+            sel.appendChild(opt);
+          }
+          sel.addEventListener('change', e => {
+            draft.urgency = Number(e.target.value);
+            draft.priority = draft.impact * draft.urgency;
+            td.style.background = urgencyColor(draft.urgency);
+            refreshDraftPriority();
+          });
+          td.appendChild(sel);
+          break;
+        }
+
         case 'priority': {
           td.className = 'cell-priority';
+          draftPriorityTd = td;
+          td.textContent = draft.priority;
           td.style.background = priorityColor(draft.priority);
           td.style.color = '#fff';
-          const inp = document.createElement('input');
-          inp.type = 'number'; inp.min = 0; inp.max = 100;
-          inp.className = 'cell-input';
-          inp.value = draft.priority;
-          inp.style.cssText = 'background:transparent;color:inherit;font-weight:inherit;width:100%;text-align:center;';
-          inp.addEventListener('input', e => {
-            const v = Math.min(100, Math.max(0, Number(e.target.value) || 0));
-            draft.priority = v;
-            td.style.background = priorityColor(v);
-          });
-          td.appendChild(inp);
           break;
         }
 
@@ -612,31 +668,66 @@ const UI = (() => {
             td.textContent = task[col.key];
             break;
 
-          case 'priority': {
-            td.className = 'cell-priority';
-            const pct = Number(task.priority) || 0;
-            const bg  = priorityColor(pct);
-            td.style.background = bg;
-            td.style.color = textOnColor(pct);
-
-            const inp = document.createElement('input');
-            inp.type = 'number';
-            inp.className = 'cell-input';
-            inp.min = 0; inp.max = 100;
-            inp.value = pct;
-            inp.style.background  = 'transparent';
-            inp.style.color       = 'inherit';
-            inp.style.textAlign   = 'center';
-            inp.style.fontWeight  = 'inherit';
-            inp.style.width       = '100%';
-            inp.addEventListener('change', e => {
-              const v = Math.min(100, Math.max(0, Number(e.target.value) || 0));
-              inp.value = v;
-              td.style.background = priorityColor(v);
-              TaskStore.update(task.uuid, 'priority', v);
+          case 'impact': {
+            td.className = 'cell-impact';
+            td.style.background = impactColor(task.impact || 1);
+            td.style.color = '#fff';
+            const selI = document.createElement('select');
+            selI.className = 'cell-select';
+            selI.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
+            IMPACT_VALUES.forEach(v => {
+              const opt = document.createElement('option');
+              opt.value = v; opt.textContent = v;
+              if (v === (task.impact || 1)) opt.selected = true;
+              selI.appendChild(opt);
+            });
+            selI.addEventListener('change', e => {
+              const newImpact = Number(e.target.value);
+              td.style.background = impactColor(newImpact);
+              TaskStore.update(task.uuid, 'impact', newImpact);
+              const newPriority = newImpact * (TaskStore.getAll().find(t => t.uuid === task.uuid)?.urgency || 1);
+              TaskStore.update(task.uuid, 'priority', newPriority);
+              const pTd = tr.querySelector('[data-key="priority"]');
+              if (pTd) { pTd.textContent = newPriority; pTd.style.background = priorityColor(newPriority); }
               FileManager.scheduleSave();
             });
-            td.appendChild(inp);
+            td.appendChild(selI);
+            break;
+          }
+
+          case 'urgency': {
+            td.className = 'cell-urgency';
+            td.style.background = urgencyColor(task.urgency || 5);
+            td.style.color = '#fff';
+            const selU = document.createElement('select');
+            selU.className = 'cell-select';
+            selU.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
+            for (let v = 1; v <= 10; v++) {
+              const opt = document.createElement('option');
+              opt.value = v; opt.textContent = v;
+              if (v === (task.urgency || 5)) opt.selected = true;
+              selU.appendChild(opt);
+            }
+            selU.addEventListener('change', e => {
+              const newUrgency = Number(e.target.value);
+              td.style.background = urgencyColor(newUrgency);
+              TaskStore.update(task.uuid, 'urgency', newUrgency);
+              const newPriority = (TaskStore.getAll().find(t => t.uuid === task.uuid)?.impact || 1) * newUrgency;
+              TaskStore.update(task.uuid, 'priority', newPriority);
+              const pTd = tr.querySelector('[data-key="priority"]');
+              if (pTd) { pTd.textContent = newPriority; pTd.style.background = priorityColor(newPriority); }
+              FileManager.scheduleSave();
+            });
+            td.appendChild(selU);
+            break;
+          }
+
+          case 'priority': {
+            td.className = 'cell-priority';
+            const p = task.priority || 1;
+            td.textContent = p;
+            td.style.background = priorityColor(p);
+            td.style.color = '#fff';
             break;
           }
 

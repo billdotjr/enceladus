@@ -138,6 +138,8 @@ table {
 
 /* ── Column widths ────────────────────────────────────────── */
 col.col-id             { width: 44px; }
+col.col-impact         { width: 64px; }
+col.col-urgency        { width: 64px; }
 col.col-priority       { width: 72px; }
 col.col-createdAt      { width: 96px; }
 col.col-dueDate        { width: 110px; }
@@ -242,11 +244,21 @@ td input[type="date"].cell-input {
   color-scheme: inherit;
 }
 
-/* ── Priority heatmap ─────────────────────────────────────── */
+/* ── Impact / Urgency / Priority heatmap cells ────────────── */
+td.cell-impact,
+td.cell-urgency,
 td.cell-priority {
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
   font-size: 12px;
+  padding: 2px 4px;
+}
+td.cell-impact select.cell-select,
+td.cell-urgency select.cell-select {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 /* ── Status badge ─────────────────────────────────────────── */
