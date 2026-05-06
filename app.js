@@ -355,12 +355,18 @@ function heatColor(t) {
     g = Math.round(152 + s * (67  - 152));
     b = Math.round(0   + s * (54  - 0));
   }
-  return `rgb(${r},${g},${b})`;
+  return [r, g, b];
 }
 
-function impactColor(val)   { return heatColor(Math.log2(Math.max(1, val)) / 7); }
-function urgencyColor(val)  { return heatColor((Math.max(1, Math.min(10, val)) - 1) / 9); }
-function priorityColor(val) { return heatColor((val - 1) / (MAX_PRIORITY - 1)); }
+function heatRgb(t)  { const [r,g,b] = heatColor(t); return `rgb(${r},${g},${b})`; }
+function heatPale(t) {
+  const [r,g,b] = heatColor(t);
+  return `rgb(${Math.round(r*0.4+255*0.6)},${Math.round(g*0.4+255*0.6)},${Math.round(b*0.4+255*0.6)})`;
+}
+
+function impactColor(val)   { return heatPale(Math.log2(Math.max(1, val)) / 7); }
+function urgencyColor(val)  { return heatPale((Math.max(1, Math.min(10, val)) - 1) / 9); }
+function priorityColor(val) { return heatRgb((val - 1) / (MAX_PRIORITY - 1)); }
 
 // ── Label colour (DJB2 hash → HSL) ─────────────────────────────────────────
 
@@ -422,13 +428,15 @@ const UI = (() => {
         case 'impact': {
           td.className = 'cell-impact';
           td.style.background = impactColor(draft.impact);
-          td.style.color = '#fff';
+          td.style.color = '#1a1a1a';
           const sel = document.createElement('select');
           sel.className = 'cell-select';
           sel.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
           IMPACT_VALUES.forEach(v => {
             const opt = document.createElement('option');
             opt.value = v; opt.textContent = v;
+            opt.style.background = impactColor(v);
+            opt.style.color = '#1a1a1a';
             if (v === draft.impact) opt.selected = true;
             sel.appendChild(opt);
           });
@@ -445,13 +453,15 @@ const UI = (() => {
         case 'urgency': {
           td.className = 'cell-urgency';
           td.style.background = urgencyColor(draft.urgency);
-          td.style.color = '#fff';
+          td.style.color = '#1a1a1a';
           const sel = document.createElement('select');
           sel.className = 'cell-select';
           sel.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
           for (let v = 1; v <= 10; v++) {
             const opt = document.createElement('option');
             opt.value = v; opt.textContent = v;
+            opt.style.background = urgencyColor(v);
+            opt.style.color = '#1a1a1a';
             if (v === draft.urgency) opt.selected = true;
             sel.appendChild(opt);
           }
@@ -671,13 +681,15 @@ const UI = (() => {
           case 'impact': {
             td.className = 'cell-impact';
             td.style.background = impactColor(task.impact || 1);
-            td.style.color = '#fff';
+            td.style.color = '#1a1a1a';
             const selI = document.createElement('select');
             selI.className = 'cell-select';
             selI.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
             IMPACT_VALUES.forEach(v => {
               const opt = document.createElement('option');
               opt.value = v; opt.textContent = v;
+              opt.style.background = impactColor(v);
+              opt.style.color = '#1a1a1a';
               if (v === (task.impact || 1)) opt.selected = true;
               selI.appendChild(opt);
             });
@@ -698,13 +710,15 @@ const UI = (() => {
           case 'urgency': {
             td.className = 'cell-urgency';
             td.style.background = urgencyColor(task.urgency || 5);
-            td.style.color = '#fff';
+            td.style.color = '#1a1a1a';
             const selU = document.createElement('select');
             selU.className = 'cell-select';
             selU.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
             for (let v = 1; v <= 10; v++) {
               const opt = document.createElement('option');
               opt.value = v; opt.textContent = v;
+              opt.style.background = urgencyColor(v);
+              opt.style.color = '#1a1a1a';
               if (v === (task.urgency || 5)) opt.selected = true;
               selU.appendChild(opt);
             }
