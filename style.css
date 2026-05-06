@@ -267,10 +267,10 @@ td[data-key="name"] { font-weight: 700; }
 
 /* ── Empty date placeholder ───────────────────────────────── */
 td input[type="date"].cell-input.date-empty {
-  color: var(--text-faint);
+  opacity: 0.3;
 }
-td input[type="date"].cell-input.date-empty::-webkit-datetime-edit {
-  color: var(--text-faint);
+td input[type="date"].cell-input.date-empty:focus {
+  opacity: 1;
 }
 
 /* ── Delete button ────────────────────────────────────────── */
