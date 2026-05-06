@@ -262,14 +262,16 @@ td.cell-id {
   text-align: right;
 }
 
-/* ── Created date (readonly) ──────────────────────────────── */
-td.cell-createdAt {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
 /* ── Bold name ────────────────────────────────────────────── */
 td[data-key="name"] { font-weight: 700; }
+
+/* ── Empty date placeholder ───────────────────────────────── */
+td input[type="date"].cell-input.date-empty {
+  color: var(--text-faint);
+}
+td input[type="date"].cell-input.date-empty::-webkit-datetime-edit {
+  color: var(--text-faint);
+}
 
 /* ── Delete button ────────────────────────────────────────── */
 td.cell-del {

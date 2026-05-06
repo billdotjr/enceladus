@@ -17,7 +17,7 @@ const STATUS_STYLE = {
 const COLUMNS = [
   { key: 'id',             label: '#',              type: 'readonly',  sortable: true  },
   { key: 'priority',       label: 'Priority',       type: 'priority',  sortable: true  },
-  { key: 'createdAt',      label: 'Created',        type: 'date-ro',   sortable: true  },
+  { key: 'createdAt',      label: 'Created',        type: 'date',      sortable: true  },
   { key: 'dueDate',        label: 'Due',            type: 'date',      sortable: true  },
   { key: 'name',           label: 'Name',           type: 'text',      sortable: true  },
   { key: 'description',    label: 'Description',    type: 'text',      sortable: false },
@@ -47,7 +47,7 @@ const TaskStore = (() => {
       uuid: crypto.randomUUID(),
       id: nextId++,
       priority: 50,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString().slice(0, 10),
       dueDate: '',
       nextActionDate: '',
       name: '',
@@ -69,8 +69,9 @@ const TaskStore = (() => {
       }
       // Migrate old "Done" status to "Closed"
       if (task.status === 'Done') task.status = 'Closed';
-      // Migrate missing createdAt
+      // Migrate missing createdAt; truncate old ISO datetime to date
       if (!task.createdAt) task.createdAt = '';
+      else if (task.createdAt.length > 10) task.createdAt = task.createdAt.slice(0, 10);
       return task;
     });
     nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
@@ -365,7 +366,7 @@ function labelColor(text) {
 
 const UI = (() => {
   // ── Draft row (new task input) ────────────────────────────────────────────
-  const DRAFT_DEFAULTS = () => ({ priority: 50, dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
+  const DRAFT_DEFAULTS = () => ({ priority: 50, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
   let draft = DRAFT_DEFAULTS();
 
   function commitDraft() {
@@ -399,11 +400,6 @@ const UI = (() => {
           td.textContent = '+';
           break;
 
-        case 'date-ro':
-          // auto-filled on commit; show nothing in draft
-          td.className = 'cell-createdAt';
-          break;
-
         case 'priority': {
           td.className = 'cell-priority';
           td.style.background = priorityColor(draft.priority);
@@ -426,7 +422,11 @@ const UI = (() => {
           const inp = document.createElement('input');
           inp.type = 'date'; inp.className = 'cell-input';
           inp.value = draft[col.key] || '';
-          inp.addEventListener('change', e => { draft[col.key] = e.target.value; });
+          inp.classList.toggle('date-empty', !inp.value);
+          inp.addEventListener('change', e => {
+            draft[col.key] = e.target.value;
+            inp.classList.toggle('date-empty', !e.target.value);
+          });
           td.appendChild(inp);
           break;
         }
@@ -612,13 +612,6 @@ const UI = (() => {
             td.textContent = task[col.key];
             break;
 
-          case 'date-ro': {
-            td.className = `cell-${col.key}`;
-            const iso = task[col.key] || '';
-            td.textContent = iso ? iso.slice(0, 10) : '';
-            break;
-          }
-
           case 'priority': {
             td.className = 'cell-priority';
             const pct = Number(task.priority) || 0;
@@ -652,7 +645,9 @@ const UI = (() => {
             inp.type = 'date';
             inp.className = 'cell-input';
             inp.value = task[col.key] || '';
+            inp.classList.toggle('date-empty', !inp.value);
             inp.addEventListener('change', e => {
+              inp.classList.toggle('date-empty', !e.target.value);
               TaskStore.update(task.uuid, col.key, e.target.value);
               FileManager.scheduleSave();
             });
