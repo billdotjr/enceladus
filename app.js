@@ -15,16 +15,17 @@ const STATUS_STYLE = {
 };
 
 const COLUMNS = [
-  { key: 'id',             label: '#',            type: 'readonly',     sortable: true  },
-  { key: 'priority',       label: 'Priority',     type: 'priority',     sortable: true  },
-  { key: 'dueDate',        label: 'Due',          type: 'date',         sortable: true  },
-  { key: 'nextActionDate', label: 'Next action',  type: 'date',         sortable: true  },
-  { key: 'name',           label: 'Name',         type: 'text',         sortable: true  },
-  { key: 'description',    label: 'Description',  type: 'text',         sortable: false },
-  { key: 'nextAction',     label: 'Next action',  type: 'text',         sortable: false },
-  { key: 'contact',        label: 'Contact',      type: 'text',         sortable: true  },
-  { key: 'labels',         label: 'Label',        type: 'labels',       sortable: false },
-  { key: 'status',         label: 'Status',       type: 'status',       sortable: true  },
+  { key: 'id',             label: '#',              type: 'readonly',  sortable: true  },
+  { key: 'priority',       label: 'Priority',       type: 'priority',  sortable: true  },
+  { key: 'createdAt',      label: 'Created',        type: 'date-ro',   sortable: true  },
+  { key: 'dueDate',        label: 'Due',            type: 'date',      sortable: true  },
+  { key: 'name',           label: 'Name',           type: 'text',      sortable: true  },
+  { key: 'description',    label: 'Description',    type: 'text',      sortable: false },
+  { key: 'nextActionDate', label: 'Next action',    type: 'date',      sortable: true  },
+  { key: 'nextAction',     label: 'Next action',    type: 'text',      sortable: false },
+  { key: 'contact',        label: 'Contact',        type: 'text',      sortable: true  },
+  { key: 'labels',         label: 'Label',          type: 'labels',    sortable: false },
+  { key: 'status',         label: 'Status',         type: 'status',    sortable: true  },
 ];
 
 // Pre-built option HTML with per-status colors (used in every status select)
@@ -46,6 +47,7 @@ const TaskStore = (() => {
       uuid: crypto.randomUUID(),
       id: nextId++,
       priority: 50,
+      createdAt: new Date().toISOString(),
       dueDate: '',
       nextActionDate: '',
       name: '',
@@ -67,6 +69,8 @@ const TaskStore = (() => {
       }
       // Migrate old "Done" status to "Closed"
       if (task.status === 'Done') task.status = 'Closed';
+      // Migrate missing createdAt
+      if (!task.createdAt) task.createdAt = '';
       return task;
     });
     nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
@@ -387,11 +391,17 @@ const UI = (() => {
 
     for (const col of COLUMNS) {
       const td = document.createElement('td');
+      td.dataset.key = col.key;
 
       switch (col.type) {
         case 'readonly':
           td.className = 'cell-id draft-id';
           td.textContent = '+';
+          break;
+
+        case 'date-ro':
+          // auto-filled on commit; show nothing in draft
+          td.className = 'cell-createdAt';
           break;
 
         case 'priority': {
@@ -601,6 +611,13 @@ const UI = (() => {
             td.className = `cell-${col.key}`;
             td.textContent = task[col.key];
             break;
+
+          case 'date-ro': {
+            td.className = `cell-${col.key}`;
+            const iso = task[col.key] || '';
+            td.textContent = iso ? iso.slice(0, 10) : '';
+            break;
+          }
 
           case 'priority': {
             td.className = 'cell-priority';

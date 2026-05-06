@@ -137,17 +137,18 @@ table {
 }
 
 /* ── Column widths ────────────────────────────────────────── */
-col.col-id          { width: 44px; }
-col.col-priority    { width: 72px; }
-col.col-dueDate     { width: 110px; }
+col.col-id             { width: 44px; }
+col.col-priority       { width: 72px; }
+col.col-createdAt      { width: 96px; }
+col.col-dueDate        { width: 110px; }
 col.col-nextActionDate { width: 110px; }
-col.col-name        { width: 180px; }
-col.col-description { width: 220px; }
-col.col-nextAction  { width: 180px; }
-col.col-contact     { width: 140px; }
-col.col-labels      { width: 180px; }
-col.col-status      { width: 140px; }
-col.col-del         { width: 36px; }
+col.col-name           { width: 180px; }
+col.col-description    { width: 220px; }
+col.col-nextAction     { width: 180px; }
+col.col-contact        { width: 140px; }
+col.col-labels         { width: 180px; }
+col.col-status         { width: 140px; }
+col.col-del            { width: 36px; }
 
 /* ── Header ───────────────────────────────────────────────── */
 thead tr th {
@@ -260,6 +261,15 @@ td.cell-id {
   font-size: 11px;
   text-align: right;
 }
+
+/* ── Created date (readonly) ──────────────────────────────── */
+td.cell-createdAt {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* ── Bold name ────────────────────────────────────────────── */
+td[data-key="name"] { font-weight: 700; }
 
 /* ── Delete button ────────────────────────────────────────── */
 td.cell-del {
