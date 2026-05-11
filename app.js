@@ -26,7 +26,7 @@ const COLUMNS = [
   { key: 'nextActionDate', label: 'Next action',    type: 'date',      sortable: true  },
   { key: 'nextAction',     label: 'Next action',    type: 'text',      sortable: false },
   { key: 'contact',        label: 'Contact',        type: 'text',      sortable: true  },
-  { key: 'labels',         label: 'Label',          type: 'labels',    sortable: false },
+  { key: 'labels',         label: 'Label',          type: 'labels',    sortable: true  },
   { key: 'status',         label: 'Status',         type: 'status',    sortable: true  },
 ];
 
@@ -302,6 +302,11 @@ const SortController = (() => {
       // numeric
       if (sortKey === 'id' || sortKey === 'priority') {
         av = Number(av) || 0; bv = Number(bv) || 0;
+      }
+      // labels: sort by alphabetically first label; no labels sorts last
+      if (sortKey === 'labels') {
+        av = Array.isArray(av) && av.length ? [...av].sort()[0].toLowerCase() : '￿';
+        bv = Array.isArray(bv) && bv.length ? [...bv].sort()[0].toLowerCase() : '￿';
       }
       // date strings sort lexicographically correctly (ISO format)
       if (av < bv) return -sortDir;
