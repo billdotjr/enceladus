@@ -374,6 +374,10 @@ td.cell-labels { padding: 3px 4px; overflow: visible; white-space: normal; }
   line-height: 1.6;
 }
 
+.label-chip.dragging  { opacity: 0.35; cursor: grabbing; }
+.label-chip.drag-over { outline: 2px solid rgba(255,255,255,0.8); outline-offset: 1px; }
+.label-chip[draggable="true"] { cursor: grab; }
+
 .label-chip-x {
   background: none;
   border: none;

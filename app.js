@@ -798,6 +798,42 @@ const UI = (() => {
                 const chip = document.createElement('span');
                 chip.className = 'label-chip';
                 chip.style.background = labelColor(lbl);
+                chip.draggable = true;
+
+                chip.addEventListener('dragstart', e => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', lbl);
+                  chip.classList.add('dragging');
+                });
+                chip.addEventListener('dragend', () => {
+                  chip.classList.remove('dragging');
+                  wrap.querySelectorAll('.label-chip').forEach(c => c.classList.remove('drag-over'));
+                });
+                chip.addEventListener('dragover', e => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (!chip.classList.contains('dragging')) {
+                    wrap.querySelectorAll('.label-chip').forEach(c => c.classList.remove('drag-over'));
+                    chip.classList.add('drag-over');
+                  }
+                });
+                chip.addEventListener('dragleave', () => chip.classList.remove('drag-over'));
+                chip.addEventListener('drop', e => {
+                  e.preventDefault();
+                  const from = e.dataTransfer.getData('text/plain');
+                  if (from === lbl) return;
+                  const labels = getLabels();
+                  const fi = labels.indexOf(from);
+                  const ti = labels.indexOf(lbl);
+                  if (fi === -1 || ti === -1) return;
+                  const reordered = [...labels];
+                  reordered.splice(fi, 1);
+                  reordered.splice(ti, 0, from);
+                  TaskStore.update(task.uuid, 'labels', reordered);
+                  FileManager.scheduleSave();
+                  renderChips();
+                });
+
                 const txt = document.createElement('span');
                 txt.textContent = lbl;
                 chip.appendChild(txt);
