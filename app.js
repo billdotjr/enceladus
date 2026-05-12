@@ -820,6 +820,7 @@ const UI = (() => {
                 chip.addEventListener('dragleave', () => chip.classList.remove('drag-over'));
                 chip.addEventListener('drop', e => {
                   e.preventDefault();
+                  e.stopPropagation();
                   const from = e.dataTransfer.getData('text/plain');
                   if (from === lbl) return;
                   const labels = getLabels();
@@ -850,6 +851,23 @@ const UI = (() => {
                 wrap.insertBefore(chip, inp);
               });
             };
+
+            // Drop on empty space after last chip → move to end
+            wrap.addEventListener('dragover', e => e.preventDefault());
+            wrap.addEventListener('drop', e => {
+              e.preventDefault();
+              const from = e.dataTransfer.getData('text/plain');
+              if (!from) return;
+              const labels = getLabels();
+              const fi = labels.indexOf(from);
+              if (fi === -1 || fi === labels.length - 1) return;
+              const reordered = [...labels];
+              reordered.splice(fi, 1);
+              reordered.push(from);
+              TaskStore.update(task.uuid, 'labels', reordered);
+              FileManager.scheduleSave();
+              renderChips();
+            });
 
             const commit = () => {
               const val = inp.value.replace(/[,;]/g, '').trim();
