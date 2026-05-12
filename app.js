@@ -303,10 +303,10 @@ const SortController = (() => {
       if (sortKey === 'id' || sortKey === 'priority') {
         av = Number(av) || 0; bv = Number(bv) || 0;
       }
-      // labels: sort by alphabetically first label; no labels sorts last
+      // labels: sort by first label as ordered in the cell; no labels sorts last
       if (sortKey === 'labels') {
-        av = Array.isArray(av) && av.length ? [...av].sort()[0].toLowerCase() : '￿';
-        bv = Array.isArray(bv) && bv.length ? [...bv].sort()[0].toLowerCase() : '￿';
+        av = Array.isArray(av) && av.length ? av[0].toLowerCase() : '￿';
+        bv = Array.isArray(bv) && bv.length ? bv[0].toLowerCase() : '￿';
       }
       // date strings sort lexicographically correctly (ISO format)
       if (av < bv) return -sortDir;
