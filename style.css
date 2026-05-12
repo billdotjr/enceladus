@@ -137,20 +137,20 @@ table {
 }
 
 /* ── Column widths ────────────────────────────────────────── */
-col.col-id             { width: 40px; }
-col.col-impact         { width: 52px; }
-col.col-urgency        { width: 52px; }
-col.col-priority       { width: 56px; }
-col.col-createdAt      { width: 96px; }
-col.col-dueDate        { width: 96px; }
-col.col-nextActionDate { width: 96px; }
-col.col-name           { width: 240px; }
-col.col-description    { width: 280px; }
-col.col-nextAction     { width: 240px; }
-col.col-contact        { width: 110px; }
-col.col-labels         { width: 160px; }
-col.col-status         { width: 128px; }
-col.col-del            { width: 32px; }
+col.col-id             { width: 32px; }
+col.col-impact         { width: 44px; }
+col.col-urgency        { width: 44px; }
+col.col-priority       { width: 48px; }
+col.col-createdAt      { width: 84px; }
+col.col-dueDate        { width: 84px; }
+col.col-nextActionDate { width: 84px; }
+col.col-name           { width: 280px; }
+col.col-description    { width: 320px; }
+col.col-nextAction     { width: 280px; }
+col.col-contact        { width: 90px; }
+col.col-labels         { width: 140px; }
+col.col-status         { width: 108px; }
+col.col-del            { width: 28px; }
 
 /* ── Header ───────────────────────────────────────────────── */
 thead tr th {
