@@ -512,13 +512,21 @@ const UI = (() => {
           inp.addEventListener('change', e => {
             draft.labels = e.target.value.split(/[,;]/).map(s => s.trim()).filter(Boolean);
           });
+          let tabPending = false;
           inp.addEventListener('keydown', e => {
-            if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+            if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               const raw = inp.value.trim();
               if (raw) draft.labels = [...new Set(raw.split(/[,;]/).map(s => s.trim()).filter(Boolean))];
               commitDraft();
+            } else if (e.key === 'Tab') {
+              const raw = inp.value.trim();
+              if (raw) draft.labels = [...new Set(raw.split(/[,;]/).map(s => s.trim()).filter(Boolean))];
+              tabPending = true;
             }
+          });
+          inp.addEventListener('blur', () => {
+            if (tabPending) { tabPending = false; commitDraft(); }
           });
           td.appendChild(inp);
           break;
