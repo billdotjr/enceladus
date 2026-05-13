@@ -513,7 +513,7 @@ const UI = (() => {
             draft.labels = e.target.value.split(/[,;]/).map(s => s.trim()).filter(Boolean);
           });
           inp.addEventListener('keydown', e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
               e.preventDefault();
               const raw = inp.value.trim();
               if (raw) draft.labels = [...new Set(raw.split(/[,;]/).map(s => s.trim()).filter(Boolean))];
