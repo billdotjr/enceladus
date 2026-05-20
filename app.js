@@ -378,7 +378,8 @@ function dateDueColor(dateStr) {
   if (!dateStr) return null;
   const today = new Date().toISOString().slice(0, 10);
   const days  = Math.round((new Date(dateStr) - new Date(today)) / 86400000);
-  if (days <= 0) return { bg: '#dc2626', text: '#fff' }; // overdue / today
+  if (days < 0)  return { bg: '#7c3aed', text: '#fff' }; // overdue
+  if (days === 0) return { bg: '#dc2626', text: '#fff' }; // today
   if (days <= 2) return { bg: '#f97316', text: '#fff' }; // 1-2 days
   return null;
 }
