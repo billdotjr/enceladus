@@ -373,6 +373,16 @@ function impactColor(val)   { return heatPale(Math.log2(Math.max(1, val)) / 7); 
 function urgencyColor(val)  { return heatPale((Math.max(1, Math.min(10, val)) - 1) / 9); }
 function priorityColor(val) { return heatRgb((val - 1) / (MAX_PRIORITY - 1)); }
 
+// Returns {bg, text} if dateStr is within 2 days (or overdue), else null.
+function dateDueColor(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const days  = Math.round((new Date(dateStr) - new Date(today)) / 86400000);
+  if (days <= 0) return { bg: '#dc2626', text: '#fff' }; // overdue / today
+  if (days <= 2) return { bg: '#f97316', text: '#fff' }; // 1-2 days
+  return null;
+}
+
 // ── Label colour (DJB2 hash → HSL) ─────────────────────────────────────────
 
 function labelColor(text) {
@@ -494,9 +504,16 @@ const UI = (() => {
           inp.type = 'date'; inp.className = 'cell-input';
           inp.value = draft[col.key] || '';
           inp.classList.toggle('date-empty', !inp.value);
+          const applyDraftDateColor = val => {
+            const c = (col.key === 'dueDate' || col.key === 'nextActionDate') ? dateDueColor(val) : null;
+            td.style.background = c ? c.bg : '';
+            inp.style.color = c ? c.text : '';
+          };
+          applyDraftDateColor(inp.value);
           inp.addEventListener('change', e => {
             draft[col.key] = e.target.value;
             inp.classList.toggle('date-empty', !e.target.value);
+            applyDraftDateColor(e.target.value);
           });
           td.appendChild(inp);
           break;
@@ -775,8 +792,15 @@ const UI = (() => {
             inp.className = 'cell-input';
             inp.value = task[col.key] || '';
             inp.classList.toggle('date-empty', !inp.value);
+            const applyDateColor = val => {
+              const c = (col.key === 'dueDate' || col.key === 'nextActionDate') ? dateDueColor(val) : null;
+              td.style.background = c ? c.bg : '';
+              inp.style.color = c ? c.text : '';
+            };
+            applyDateColor(inp.value);
             inp.addEventListener('change', e => {
               inp.classList.toggle('date-empty', !e.target.value);
+              applyDateColor(e.target.value);
               TaskStore.update(task.uuid, col.key, e.target.value);
               FileManager.scheduleSave();
             });
