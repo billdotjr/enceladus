@@ -373,27 +373,15 @@ function impactColor(val)   { return heatPale(Math.log2(Math.max(1, val)) / 7); 
 function urgencyColor(val)  { return heatPale((Math.max(1, Math.min(10, val)) - 1) / 9); }
 function priorityColor(val) { return heatRgb((val - 1) / (MAX_PRIORITY - 1)); }
 
-// Returns {bg, text} for due date urgency, else null.
+// Returns {bg, text} if dateStr is within 2 days (or overdue), else null.
 function dateDueColor(dateStr) {
   if (!dateStr) return null;
   const today = new Date().toISOString().slice(0, 10);
   const days  = Math.round((new Date(dateStr) - new Date(today)) / 86400000);
-  if (days < 0)   return { bg: '#7c3aed', text: '#fff' }; // overdue: purple
-  if (days === 0) return { bg: '#dc2626', text: '#fff' }; // today: red
-  if (days <= 2)  return { bg: '#f97316', text: '#fff' }; // 1-2 days: orange
+  if (days < 0)  return { bg: '#7c3aed', text: '#fff' }; // overdue
+  if (days === 0) return { bg: '#dc2626', text: '#fff' }; // today
+  if (days <= 2) return { bg: '#f97316', text: '#fff' }; // 1-2 days
   return null;
-}
-
-// Returns {bg, text} for next-action date urgency, else null.
-function dateNextActionColor(dateStr) {
-  if (!dateStr) return null;
-  const today = new Date().toISOString().slice(0, 10);
-  const days  = Math.round((new Date(dateStr) - new Date(today)) / 86400000);
-  if (days < 0)   return { bg: '#dc2626', text: '#fff' };         // overdue: red
-  if (days === 0) return { bg: '#2563eb', text: '#fff' };         // today: blue
-  if (days === 1) return { bg: 'rgb(168,193,247)', text: '#1a1a1a' }; // tomorrow: pale blue
-  return null;
-}
 }
 
 // ── Label colour (DJB2 hash → HSL) ─────────────────────────────────────────
@@ -518,7 +506,7 @@ const UI = (() => {
           inp.value = draft[col.key] || '';
           inp.classList.toggle('date-empty', !inp.value);
           const applyDraftDateColor = val => {
-            const c = col.key === 'dueDate' ? dateDueColor(val) : col.key === 'nextActionDate' ? dateNextActionColor(val) : null;
+            const c = (col.key === 'dueDate' || col.key === 'nextActionDate') ? dateDueColor(val) : null;
             td.style.background = c ? c.bg : '';
             inp.style.color = c ? c.text : '';
           };
@@ -806,7 +794,7 @@ const UI = (() => {
             inp.value = task[col.key] || '';
             inp.classList.toggle('date-empty', !inp.value);
             const applyDateColor = val => {
-              const c = col.key === 'dueDate' ? dateDueColor(val) : col.key === 'nextActionDate' ? dateNextActionColor(val) : null;
+              const c = (col.key === 'dueDate' || col.key === 'nextActionDate') ? dateDueColor(val) : null;
               td.style.background = c ? c.bg : '';
               inp.style.color = c ? c.text : '';
             };
