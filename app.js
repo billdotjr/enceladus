@@ -21,12 +21,12 @@ const COLUMNS = [
   { key: 'priority',       label: 'Priority',       type: 'priority',  sortable: true  },
   { key: 'createdAt',      label: 'Created',        type: 'date',      sortable: true  },
   { key: 'dueDate',        label: 'Due',            type: 'date',      sortable: true  },
-  { key: 'labels',         label: 'Label',          type: 'labels',    sortable: true  },
   { key: 'name',           label: 'Name',           type: 'text',      sortable: true  },
   { key: 'description',    label: 'Description',    type: 'text',      sortable: false },
   { key: 'nextActionDate', label: 'Next action',    type: 'date',      sortable: true  },
   { key: 'nextAction',     label: 'Next action',    type: 'text',      sortable: false },
   { key: 'contact',        label: 'Contact',        type: 'text',      sortable: true  },
+  { key: 'labels',         label: 'Label',          type: 'labels',    sortable: true  },
   { key: 'status',         label: 'Status',         type: 'status',    sortable: true  },
 ];
 
