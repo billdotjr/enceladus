@@ -409,30 +409,23 @@ function labelColor(text) {
 // ── UI ──────────────────────────────────────────────────────────────────────
 
 const UI = (() => {
-  // Measures rendered chips and sets col.col-labels to fit widest 2-chip row.
-  // Debounced via queueMicrotask so N chip renders in one pass trigger one update.
-  let _labelsWidthPending = false;
+  // Measures rendered chips and sets col.col-labels to fit the widest 2-chip row.
   function updateLabelsColWidth() {
-    if (_labelsWidthPending) return;
-    _labelsWidthPending = true;
-    queueMicrotask(() => {
-      _labelsWidthPending = false;
-      const col = document.querySelector('col.col-labels');
-      if (!col) return;
-      let maxW = 70; // minimum: fits header text and the + input
-      document.querySelectorAll('td.cell-labels .label-cell').forEach(wrap => {
-        const chips = [...wrap.querySelectorAll('.label-chip')];
-        if (!chips.length) return;
-        const count = Math.min(2, chips.length);
-        let w = 8; // td padding: 4px left + 4px right
-        for (let i = 0; i < count; i++) {
-          w += chips[i].getBoundingClientRect().width;
-          if (i < count - 1) w += 3; // gap between chips
-        }
-        maxW = Math.max(maxW, Math.ceil(w));
-      });
-      col.style.width = maxW + 'px';
+    const col = document.querySelector('col.col-labels');
+    if (!col) return;
+    let maxW = 70; // minimum: fits header text + the + input
+    document.querySelectorAll('td.cell-labels .label-cell').forEach(wrap => {
+      const chips = [...wrap.querySelectorAll('.label-chip')];
+      if (!chips.length) return;
+      const count = Math.min(2, chips.length);
+      let w = 8; // td padding: 4px left + 4px right
+      for (let i = 0; i < count; i++) {
+        w += chips[i].getBoundingClientRect().width;
+        if (i < count - 1) w += 3; // gap
+      }
+      maxW = Math.max(maxW, Math.ceil(w));
     });
+    col.style.width = maxW + 'px';
   }
 
   // ── Draft row (new task input) ────────────────────────────────────────────
@@ -903,6 +896,7 @@ const UI = (() => {
                   TaskStore.update(task.uuid, 'labels', reordered);
                   FileManager.scheduleSave();
                   renderChips();
+                  updateLabelsColWidth();
                 });
 
                 const txt = document.createElement('span');
@@ -915,12 +909,12 @@ const UI = (() => {
                   TaskStore.update(task.uuid, 'labels', getLabels().filter(l => l !== lbl));
                   FileManager.scheduleSave();
                   renderChips();
+                  updateLabelsColWidth();
                   refreshLabelDatalist();
                 });
                 chip.appendChild(x);
                 wrap.insertBefore(chip, inp);
               });
-              updateLabelsColWidth();
             };
 
             // Drop on empty space after last chip → move to end
@@ -938,6 +932,7 @@ const UI = (() => {
               TaskStore.update(task.uuid, 'labels', reordered);
               FileManager.scheduleSave();
               renderChips();
+              updateLabelsColWidth();
             });
 
             const commit = () => {
@@ -949,6 +944,7 @@ const UI = (() => {
               }
               inp.value = '';
               renderChips();
+              updateLabelsColWidth();
             };
 
             inp.addEventListener('keydown', e => {
@@ -1025,6 +1021,7 @@ const UI = (() => {
 
       tbody.appendChild(tr);
     }
+    updateLabelsColWidth();
   }
 
   function renderBody() {
