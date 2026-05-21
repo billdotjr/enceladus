@@ -409,6 +409,32 @@ function labelColor(text) {
 // ── UI ──────────────────────────────────────────────────────────────────────
 
 const UI = (() => {
+  // Measures rendered chips and sets col.col-labels to fit widest 2-chip row.
+  // Debounced via queueMicrotask so N chip renders in one pass trigger one update.
+  let _labelsWidthPending = false;
+  function updateLabelsColWidth() {
+    if (_labelsWidthPending) return;
+    _labelsWidthPending = true;
+    queueMicrotask(() => {
+      _labelsWidthPending = false;
+      const col = document.querySelector('col.col-labels');
+      if (!col) return;
+      let maxW = 70; // minimum: fits header text and the + input
+      document.querySelectorAll('td.cell-labels .label-cell').forEach(wrap => {
+        const chips = [...wrap.querySelectorAll('.label-chip')];
+        if (!chips.length) return;
+        const count = Math.min(2, chips.length);
+        let w = 8; // td padding: 4px left + 4px right
+        for (let i = 0; i < count; i++) {
+          w += chips[i].getBoundingClientRect().width;
+          if (i < count - 1) w += 3; // gap between chips
+        }
+        maxW = Math.max(maxW, Math.ceil(w));
+      });
+      col.style.width = maxW + 'px';
+    });
+  }
+
   // ── Draft row (new task input) ────────────────────────────────────────────
   const DRAFT_DEFAULTS = () => ({ impact: 1, urgency: 5, priority: 5, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
   let draft = DRAFT_DEFAULTS();
@@ -894,6 +920,7 @@ const UI = (() => {
                 chip.appendChild(x);
                 wrap.insertBefore(chip, inp);
               });
+              updateLabelsColWidth();
             };
 
             // Drop on empty space after last chip → move to end
