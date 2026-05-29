@@ -685,12 +685,14 @@ const UI = (() => {
 
   function renderRows(tasks, preserveDraft = false) {
     const tbody = document.getElementById('task-body');
+    const privateBody = document.getElementById('private-body');
     if (preserveDraft) {
       tbody.querySelectorAll('tr:not(.draft-row)').forEach(r => r.remove());
     } else {
       tbody.innerHTML = '';
       tbody.appendChild(buildDraftRow());
     }
+    privateBody.innerHTML = '';
 
     if (tasks.length === 0) {
       const tr = document.createElement('tr');
@@ -986,7 +988,8 @@ const UI = (() => {
       tdDel.appendChild(btnDel);
       tr.appendChild(tdDel);
 
-      tbody.appendChild(tr);
+      const isPrivate = task.labels.some(l => l.toLowerCase() === 'private');
+      (isPrivate ? privateBody : tbody).appendChild(tr);
     }
   }
 
