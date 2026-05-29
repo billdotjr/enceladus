@@ -317,9 +317,11 @@ td.cell-del {
 .table-wrapper::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* ── Private section spacer ───────────────────────────────── */
-#private-body tr:first-child td {
-  padding-top: 16px;
-  border-top: 1px dashed var(--border);
+tr.private-spacer td {
+  height: 18px;
+  border: none;
+  background: var(--bg) !important;
+  padding: 0;
 }
 
 /* ── Draft row ────────────────────────────────────────────── */

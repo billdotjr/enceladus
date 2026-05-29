@@ -989,6 +989,14 @@ const UI = (() => {
       tr.appendChild(tdDel);
 
       const isPrivate = task.labels.some(l => l.toLowerCase() === 'private');
+      if (isPrivate && privateBody.childElementCount === 0) {
+        const spacer = document.createElement('tr');
+        spacer.className = 'private-spacer';
+        const td = document.createElement('td');
+        td.colSpan = COLUMNS.length + 1;
+        spacer.appendChild(td);
+        privateBody.appendChild(spacer);
+      }
       (isPrivate ? privateBody : tbody).appendChild(tr);
     }
   }
