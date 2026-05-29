@@ -602,16 +602,15 @@ const UI = (() => {
     if (cell) cell.focus();
   }
 
-  // Build colgroup once
+  // Build colgroup once (shared column widths for both tables)
   function buildColgroup() {
     let cg = '<colgroup>';
     for (const col of COLUMNS) cg += `<col class="col-${col.key}">`;
     cg += '<col class="col-del">';
     cg += '</colgroup>';
-    // inject only once
-    const tbl = document.getElementById('task-table');
-    if (!tbl.querySelector('colgroup')) {
-      tbl.insertAdjacentHTML('afterbegin', cg);
+    for (const id of ['task-table', 'private-table']) {
+      const tbl = document.getElementById(id);
+      if (!tbl.querySelector('colgroup')) tbl.insertAdjacentHTML('afterbegin', cg);
     }
   }
 
@@ -989,16 +988,9 @@ const UI = (() => {
       tr.appendChild(tdDel);
 
       const isPrivate = task.labels.some(l => l.toLowerCase() === 'private');
-      if (isPrivate && privateBody.childElementCount === 0) {
-        const spacer = document.createElement('tr');
-        spacer.className = 'private-spacer';
-        const td = document.createElement('td');
-        td.colSpan = COLUMNS.length + 1;
-        spacer.appendChild(td);
-        privateBody.appendChild(spacer);
-      }
       (isPrivate ? privateBody : tbody).appendChild(tr);
     }
+    document.getElementById('private-wrapper').classList.toggle('hidden', privateBody.childElementCount === 0);
   }
 
   function renderBody() {

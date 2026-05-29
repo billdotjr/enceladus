@@ -121,7 +121,7 @@ body {
 .save-status { color: var(--accent); }
 
 /* ── Table wrapper ────────────────────────────────────────── */
-main { padding: 12px; overflow: hidden; }
+main { padding: 12px; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
 
 .table-wrapper {
   overflow-x: auto;
@@ -315,14 +315,6 @@ td.cell-del {
 .table-wrapper::-webkit-scrollbar { height: 6px; }
 .table-wrapper::-webkit-scrollbar-track { background: var(--bg); }
 .table-wrapper::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-/* ── Private section spacer ───────────────────────────────── */
-tr.private-spacer td {
-  height: 18px;
-  border: none;
-  background: var(--bg) !important;
-  padding: 0;
-}
 
 /* ── Draft row ────────────────────────────────────────────── */
 tbody tr.draft-row {
