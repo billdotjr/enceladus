@@ -346,7 +346,7 @@ const FilterController = (() => {
 
   function get(key) { return filters[key] ?? ''; }
 
-  function clear() { filters = {}; }
+  function clear() { filters = { status: '!closed' }; }
 
   return { set, apply, get, clear };
 })();
