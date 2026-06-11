@@ -7,11 +7,11 @@ const STATUSES = ['New', 'Workable', 'In Progress', 'Today', 'Pending feedback',
 
 const STATUS_STYLE = {
   'New':                { bg: '#d97706', text: '#fff' },  // amber
-  'Workable':           { bg: '#0891b2', text: '#fff' },  // cyan
+  'Workable':           { bg: '#db2777', text: '#fff' },  // pink
   'In Progress':        { bg: '#15803d', text: '#fff' },  // dark green
   'Today':              { bg: '#2563eb', text: '#fff' },  // bright blue
   'Pending feedback':   { bg: '#7c3aed', text: '#fff' },  // dim purple
-  'Meeting scheduled':  { bg: '#db2777', text: '#fff' },  // pink
+  'Meeting scheduled':  { bg: '#0891b2', text: '#fff' },  // cyan
   'On-Hold':            { bg: '#9ca3af', text: '#1a1a1a' }, // mid grey
   'Closed':             { bg: '#4b5563', text: '#d1d5db' }, // dark grey
 };
