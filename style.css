@@ -470,6 +470,23 @@ td.cell-labels { padding: 3px 4px; overflow: visible; white-space: normal; }
 }
 .api-warn.hidden { display: none; }
 
+/* ── Footer ───────────────────────────────────────────────── */
+.app-footer {
+  text-align: center;
+  padding: 20px 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.app-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.app-footer a:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 768px) {
   .topbar { padding: 0 8px; }
