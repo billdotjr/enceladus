@@ -346,7 +346,9 @@ const FilterController = (() => {
 
   function get(key) { return filters[key] ?? ''; }
 
-  return { set, apply, get };
+  function clear() { filters = {}; }
+
+  return { set, apply, get, clear };
 })();
 
 // ── Heatmap colours ─────────────────────────────────────────────────────────
@@ -672,8 +674,20 @@ const UI = (() => {
       }
       row.appendChild(th);
     }
-    // spacer for delete column
-    row.appendChild(document.createElement('th'));
+    // clear-all filters button in delete column
+    const thClear = document.createElement('th');
+    thClear.className = 'th-del';
+    const btnClear = document.createElement('button');
+    btnClear.className = 'btn-del';
+    btnClear.title = 'Clear all filters';
+    btnClear.textContent = '✕';
+    btnClear.addEventListener('click', () => {
+      FilterController.clear();
+      buildFilterRow();
+      renderBody();
+    });
+    thClear.appendChild(btnClear);
+    row.appendChild(thClear);
     refreshLabelDatalist();
   }
 
