@@ -136,6 +136,11 @@ The status filter defaults to `!closed` (active tasks only).
 - [x] `app.js` — application logic
 - [x] `ARCHITECTURE.md` — this file
 
+## Footer
+
+A static `<footer>` in `index.html` shows the app name, last-commit date, and a link to the GitHub repo.
+The date (`index.html` line 65) must be updated manually after each deploy — there is no build step to inject it automatically.
+
 ## Outstanding / Future Work
 
 - Unit tests (e.g. Vitest) for TaskStore / FilterController
