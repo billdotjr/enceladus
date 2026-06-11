@@ -3,7 +3,7 @@
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const STATUSES = ['New', 'Workable', 'In Progress', 'Today', 'Pending feedback', 'Meeting scheduled', 'On-Hold', 'Closed'];
+const STATUSES = ['Today', 'Workable', 'In Progress', 'New', 'Pending feedback', 'Meeting scheduled', 'On-Hold', 'Closed'];
 
 const STATUS_STYLE = {
   'New':                { bg: '#16a34a', text: '#fff' },  // green
