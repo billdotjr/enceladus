@@ -6,12 +6,12 @@
 const STATUSES = ['New', 'Workable', 'In Progress', 'Today', 'Pending feedback', 'Meeting scheduled', 'On-Hold', 'Closed'];
 
 const STATUS_STYLE = {
-  'New':                { bg: '#d97706', text: '#fff' },  // amber
-  'Workable':           { bg: '#db2777', text: '#fff' },  // pink
-  'In Progress':        { bg: '#15803d', text: '#fff' },  // dark green
-  'Today':              { bg: '#2563eb', text: '#fff' },  // bright blue
-  'Pending feedback':   { bg: '#7c3aed', text: '#fff' },  // dim purple
-  'Meeting scheduled':  { bg: '#0891b2', text: '#fff' },  // cyan
+  'New':                { bg: '#16a34a', text: '#fff' },  // green
+  'Workable':           { bg: '#ea580c', text: '#fff' },  // orange
+  'In Progress':        { bg: '#ca8a04', text: '#fff' },  // amber
+  'Today':              { bg: '#dc2626', text: '#fff' },  // red
+  'Pending feedback':   { bg: '#2563eb', text: '#fff' },  // blue
+  'Meeting scheduled':  { bg: '#7c3aed', text: '#fff' },  // purple
   'On-Hold':            { bg: '#9ca3af', text: '#1a1a1a' }, // mid grey
   'Closed':             { bg: '#4b5563', text: '#d1d5db' }, // dark grey
 };

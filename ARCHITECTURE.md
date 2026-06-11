@@ -94,12 +94,12 @@ The loader (`TaskStore.load`) handles older formats transparently:
 
 | Value | Colour |
 |-------|--------|
-| New | Amber |
-| Workable | Pink |
-| In Progress | Dark green |
-| Today | Bright blue |
-| Pending feedback | Purple |
-| Meeting scheduled | Cyan |
+| Today | Red |
+| Workable | Orange |
+| In Progress | Amber |
+| New | Green |
+| Pending feedback | Blue |
+| Meeting scheduled | Purple |
 | On-Hold | Grey |
 | Closed | Dark grey |
 
