@@ -9,7 +9,7 @@ const STATUS_STYLE = {
   'New':                { bg: '#16a34a', text: '#fff' },  // green
   'Workable':           { bg: '#ea580c', text: '#fff' },  // orange
   'In Progress':        { bg: '#ca8a04', text: '#fff' },  // amber
-  'Today':              { bg: '#dc2626', text: '#fff' },  // red
+  'Today':              { bg: '#c0392b', text: '#fff' },  // muted red
   'Pending feedback':   { bg: '#2563eb', text: '#fff' },  // blue
   'Meeting scheduled':  { bg: '#7c3aed', text: '#fff' },  // purple
   'On-Hold':            { bg: '#9ca3af', text: '#1a1a1a' }, // mid grey
