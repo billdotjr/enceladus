@@ -3,10 +3,11 @@
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const STATUSES = ['New', 'In Progress', 'Today', 'Pending feedback', 'Meeting scheduled', 'On-Hold', 'Closed'];
+const STATUSES = ['New', 'Workable', 'In Progress', 'Today', 'Pending feedback', 'Meeting scheduled', 'On-Hold', 'Closed'];
 
 const STATUS_STYLE = {
   'New':                { bg: '#d97706', text: '#fff' },  // amber
+  'Workable':           { bg: '#0891b2', text: '#fff' },  // cyan
   'In Progress':        { bg: '#15803d', text: '#fff' },  // dark green
   'Today':              { bg: '#2563eb', text: '#fff' },  // bright blue
   'Pending feedback':   { bg: '#7c3aed', text: '#fff' },  // dim purple
