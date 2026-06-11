@@ -284,8 +284,8 @@ const FileManager = (() => {
 // ── SortController ──────────────────────────────────────────────────────────
 
 const SortController = (() => {
-  let sortKey = 'id';
-  let sortDir = -1; // default: newest first
+  let sortKey = 'nextActionDate';
+  let sortDir = 1; // default: soonest next action first
 
   function toggle(key) {
     if (sortKey === key) {
@@ -310,7 +310,11 @@ const SortController = (() => {
         av = Array.isArray(av) && av.length ? av[0].toLowerCase() : '￿';
         bv = Array.isArray(bv) && bv.length ? bv[0].toLowerCase() : '￿';
       }
-      // date strings sort lexicographically correctly (ISO format)
+      // date strings sort lexicographically correctly (ISO format); empty dates sort last
+      if (sortKey === 'createdAt' || sortKey === 'dueDate' || sortKey === 'nextActionDate') {
+        av = av || '9999-99-99';
+        bv = bv || '9999-99-99';
+      }
       if (av < bv) return -sortDir;
       if (av > bv) return  sortDir;
       return 0;
