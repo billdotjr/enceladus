@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta name="referrer" content="no-referrer">
   <title>Enceladus — Todo</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="style.css" />
@@ -28,7 +31,7 @@
   </div>
 
   <header class="topbar">
-    <span class="app-title">Enceladus <a href="https://github.com/billdotjr/enceladus" target="_blank" rel="noopener" class="app-version">v2026-06-11</a></span>
+    <span class="app-title">Enceladus <a href="https://github.com/billdotjr/enceladus" target="_blank" rel="noreferrer" class="app-version">v2026-06-11</a></span>
     <div class="topbar-actions">
       <span id="api-warn" class="api-warn hidden" title="File System Access API not available — auto-save disabled">⚠</span>
       <button id="btn-open"  class="btn">Switch file</button>

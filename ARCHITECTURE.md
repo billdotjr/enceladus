@@ -12,6 +12,18 @@ no network requests. All data stays on the user's machine via the
 - All JS/CSS inlined or served from same origin
 - File System Access API writes only to the file the user explicitly selects
 - No `fetch` / `XMLHttpRequest` to any remote host
+- **Content Security Policy** (`<meta http-equiv="Content-Security-Policy">`) enforces
+  `connect-src 'none'` — the browser engine itself blocks all outbound network requests
+  (fetch, XHR, WebSocket, sendBeacon) regardless of what JS runs. Second layer of defence
+  independent of the application code.
+- `<meta name="referrer" content="no-referrer">` suppresses `Referer` headers on all
+  outbound navigations, including the GitHub link.
+
+**Residual risk (no client-side mitigation exists):** CSP cannot block top-level navigation.
+A hypothetical XSS could redirect via `location.href` to an attacker URL carrying data in
+the query string. The `navigate-to` CSP directive that would address this never shipped in
+browsers. The defence here is keeping XSS surface minimal (all user data rendered via
+`textContent` / `.value`, never `innerHTML`).
 
 ## File Tree
 
