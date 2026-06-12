@@ -33,9 +33,9 @@ A private, client-side-only todo list app. No server, no accounts, no data ever 
 
 | Browser | Auto-save | Manual save |
 |---------|-----------|-------------|
-| Chrome / Edge / Arc | ✅ | ✅ |
-| Firefox | ❌ | ✅ |
-| Safari | ❌ | ✅ |
+| Chrome / Edge / Arc | ✅ | ✅ writes to the chosen file |
+| Firefox | ❌ | ✅ downloads `tasks.json` |
+| Safari | ❌ | ✅ downloads `tasks.json` |
 
 ## Data format
 

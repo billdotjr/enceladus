@@ -257,7 +257,23 @@ const FileManager = (() => {
   }
 
   async function writeToHandle() {
-    if (!fileHandle) return;
+    if (!fileHandle) {
+      // Fallback for browsers without the File System Access API:
+      // trigger a download via a blob: URL — stays entirely in-browser,
+      // no network involved. Only reachable from the explicit Save button
+      // (the auto-save debounce is gated on fileHandle).
+      const blob = new Blob([TaskStore.toJSON()], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'tasks.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      lastSaveTime = new Date();
+      UI.setSaveStatus(formatSaveStatus(lastSaveTime));
+      document.getElementById('btn-save').disabled = true;
+      return;
+    }
     try {
       const writable = await fileHandle.createWritable();
       await writable.write(TaskStore.toJSON());
@@ -310,10 +326,12 @@ const SortController = (() => {
         av = Array.isArray(av) && av.length ? av[0].toLowerCase() : '￿';
         bv = Array.isArray(bv) && bv.length ? bv[0].toLowerCase() : '￿';
       }
-      // date strings sort lexicographically correctly (ISO format); empty dates sort last
+      // date strings sort lexicographically correctly (ISO format);
+      // empty dates always sort last regardless of direction
       if (sortKey === 'createdAt' || sortKey === 'dueDate' || sortKey === 'nextActionDate') {
-        av = av || '9999-99-99';
-        bv = bv || '9999-99-99';
+        const empty = sortDir === 1 ? '9999-99-99' : '0000-00-00';
+        av = av || empty;
+        bv = bv || empty;
       }
       if (av < bv) return -sortDir;
       if (av > bv) return  sortDir;
@@ -698,7 +716,11 @@ const UI = (() => {
       dl.id = 'labels-datalist';
       document.body.appendChild(dl);
     }
-    dl.innerHTML = TaskStore.allLabels().map(l => `<option value="${l}">`).join('');
+    dl.replaceChildren(...TaskStore.allLabels().map(l => {
+      const opt = document.createElement('option');
+      opt.value = l;
+      return opt;
+    }));
   }
 
   function renderRows(tasks, preserveDraft = false) {
@@ -711,6 +733,7 @@ const UI = (() => {
       tbody.appendChild(buildDraftRow());
     }
     privateBody.innerHTML = '';
+    document.getElementById('private-wrapper').classList.add('hidden');
 
     if (tasks.length === 0) {
       const tr = document.createElement('tr');

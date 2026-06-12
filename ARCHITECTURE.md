@@ -20,7 +20,11 @@ enceladus/
 ├── index.html          # Entry point — shell, imports styles + script
 ├── style.css           # All styling: layout, table, heatmap, dark/light mode
 ├── app.js              # All application logic (ES modules, no bundler needed)
-└── ARCHITECTURE.md     # This file
+├── favicon.svg         # Pixel-art space invader (flat 2D, dark green)
+├── ARCHITECTURE.md     # This file
+├── README.md           # User-facing documentation
+├── CLAUDE.md           # Instructions for Claude sessions
+└── LICENSE             # MIT
 ```
 
 ## Data Format (`tasks.json`)
@@ -121,11 +125,15 @@ The status filter defaults to `!closed` (active tasks only).
 - **Labels**: type in the `+` input and press Enter / `,` / `;` to add a chip;
   drag chips to reorder; click × to remove; Tab from the draft label field commits the task
 - **Delete**: trash icon per row (confirm dialog)
-- **Sort**: click column header → asc → desc → off; labels sort by first chip (user-defined order)
-- **Filter**: second header row with `<input>` per column; label column shows datalist
+- **Sort**: click column header → asc → desc → off; labels sort by first chip (user-defined order).
+  Default sort on load: Next Action date ascending; tasks with no date sort last in either direction
+- **Filter**: second header row with `<input>` per column; label column shows datalist;
+  ✕ button at the end of the filter row resets all filters to the default (`status: !closed`)
 - **File open**: "Open existing file" on startup or "Switch file" in topbar
 - **Auto-save**: debounced 500 ms after any change; Save button for immediate write;
-  status bar shows last-save timestamp with live "ago" suffix
+  status bar shows last-save timestamp with live "ago" suffix.
+  On browsers without the File System Access API the Save button downloads `tasks.json`
+  via a `blob:` URL instead (auto-save stays disabled)
 - **Theme**: ☀ / ☾ button in topbar, persisted to `localStorage`
 - **Reopen**: last-used file handle stored in IndexedDB; offered as one-click reopen on startup
 
