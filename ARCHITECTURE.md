@@ -141,6 +141,8 @@ The status filter defaults to `!closed` (active tasks only).
   Default sort on load: Next Action date ascending; tasks with no date sort last in either direction
 - **Filter**: second header row with `<input>` per column; label column shows datalist;
   ✕ button at the end of the filter row resets all filters to the default (`status: !closed`)
+- **Refresh**: ↻ button in topbar resets sort and filters to defaults
+  (Next Action ascending, `status: !closed`) and re-renders — no page reload or file reopen needed
 - **File open**: "Open existing file" on startup or "Switch file" in topbar
 - **Auto-save**: debounced 500 ms after any change; Save button for immediate write;
   status bar shows last-save timestamp with live "ago" suffix.

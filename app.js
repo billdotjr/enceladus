@@ -341,7 +341,9 @@ const SortController = (() => {
 
   function getState() { return { sortKey, sortDir }; }
 
-  return { toggle, apply, getState };
+  function reset() { sortKey = 'nextActionDate'; sortDir = 1; }
+
+  return { toggle, apply, getState, reset };
 })();
 
 // ── FilterController ────────────────────────────────────────────────────────
@@ -1131,6 +1133,13 @@ async function init() {
   // "Switch file" in topbar — open a different file
   document.getElementById('btn-open').addEventListener('click', async () => {
     await FileManager.open();
+  });
+
+  // Refresh — reset sort and filters to defaults and re-render
+  document.getElementById('btn-refresh').addEventListener('click', () => {
+    SortController.reset();
+    FilterController.clear();
+    UI.render();
   });
 
   document.getElementById('btn-new').addEventListener('click', () => {
