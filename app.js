@@ -16,6 +16,31 @@ const STATUS_STYLE = {
   'Closed':             { bg: '#4b5563', text: '#d1d5db' }, // dark grey
 };
 
+const QUADRANT_STYLE = {
+  'base':        { bg: '#16a34a', text: '#fff' }, // green
+  'important':   { bg: '#2563eb', text: '#fff' }, // blue
+  'urgent':      { bg: '#ea580c', text: '#fff' }, // orange
+  'urg&import':  { bg: '#dc2626', text: '#fff' }, // red
+};
+
+// Grid order for the 2x2 picker: [top-left, top-right, bottom-left, bottom-right]
+// Important axis vertical (top=yes), Urgent axis horizontal (right=yes) —
+// urg&import is top-right, base is bottom-left.
+const QUADRANT_ORDER = ['important', 'urg&import', 'base', 'urgent'];
+
+function quadrantLabel(t) {
+  if (t.important && t.urgent) return 'urg&import';
+  if (t.important) return 'important';
+  if (t.urgent)    return 'urgent';
+  return 'base';
+}
+
+function quadrantRank(t) {
+  // chmod-style bit encoding: important = 1, urgent = 2
+  return (t.important ? 1 : 0) + (t.urgent ? 2 : 0);
+  // base=0, important=1, urgent=2, urg&import=3
+}
+
 const COLUMNS = [
   { key: 'id',             label: '#',              type: 'readonly',  sortable: true  },
   { key: 'impact',         label: 'Impact',         type: 'impact',    sortable: true  },
@@ -53,9 +78,8 @@ const TaskStore = (() => {
     return {
       uuid: crypto.randomUUID(),
       id: nextId++,
-      impact: 1,
-      urgency: 5,
-      priority: 5,
+      important: false,
+      urgent: false,
       createdAt: new Date().toISOString().slice(0, 10),
       dueDate: '',
       nextActionDate: '',
@@ -81,10 +105,18 @@ const TaskStore = (() => {
       // Migrate missing createdAt; truncate old ISO datetime to date
       if (!task.createdAt) task.createdAt = '';
       else if (task.createdAt.length > 10) task.createdAt = task.createdAt.slice(0, 10);
-      // Migrate to impact/urgency model
-      if (task.impact === undefined) task.impact = 1;
-      if (task.urgency === undefined) task.urgency = 5;
-      task.priority = task.impact * task.urgency;
+      // Migrate impact/urgency numeric model to important/urgent booleans.
+      // Defaults for the old model were impact=1, urgency=5 — anything
+      // moved away from the default is treated as "on" for that axis.
+      if (task.important === undefined || task.urgent === undefined) {
+        const oldImpact  = task.impact  !== undefined ? task.impact  : 1;
+        const oldUrgency = task.urgency !== undefined ? task.urgency : 5;
+        task.important = oldImpact  !== 1;
+        task.urgent    = oldUrgency !== 5;
+      }
+      delete task.impact;
+      delete task.urgency;
+      delete task.priority;
       return task;
     });
     nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
@@ -427,7 +459,7 @@ function labelColor(text) {
 
 const UI = (() => {
   // ── Draft row (new task input) ────────────────────────────────────────────
-  const DRAFT_DEFAULTS = () => ({ impact: 1, urgency: 5, priority: 5, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
+  const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
   let draft = DRAFT_DEFAULTS();
 
   function commitDraft() {
