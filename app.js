@@ -43,9 +43,7 @@ function quadrantRank(t) {
 
 const COLUMNS = [
   { key: 'id',             label: '#',              type: 'readonly',  sortable: true  },
-  { key: 'impact',         label: 'Impact',         type: 'impact',    sortable: true  },
-  { key: 'urgency',        label: 'Urgency',        type: 'urgency',   sortable: true  },
-  { key: 'priority',       label: 'Priority',       type: 'priority',  sortable: true  },
+  { key: 'priority',       label: 'Priority',       type: 'quadrant',  sortable: true  },
   { key: 'createdAt',      label: 'Created',        type: 'date',      sortable: true  },
   { key: 'dueDate',        label: 'Due',            type: 'date',      sortable: true  },
   { key: 'name',           label: 'Name',           type: 'text',      sortable: true  },
@@ -56,9 +54,6 @@ const COLUMNS = [
   { key: 'labels',         label: 'Label',          type: 'labels',    sortable: true  },
   { key: 'status',         label: 'Status',         type: 'status',    sortable: true  },
 ];
-
-const IMPACT_VALUES = [1, 2, 4, 8, 16, 32, 64, 128];
-const MAX_PRIORITY  = 128 * 10; // 1280
 
 // Pre-built option HTML with per-status colors (used in every status select)
 function statusOptionsHTML(selected) {
@@ -429,10 +424,6 @@ function heatPale(t) {
   return `rgb(${Math.round(r*0.4+255*0.6)},${Math.round(g*0.4+255*0.6)},${Math.round(b*0.4+255*0.6)})`;
 }
 
-function impactColor(val)   { return heatPale(Math.log2(Math.max(1, val)) / 7); }
-function urgencyColor(val)  { return heatPale((Math.max(1, Math.min(10, val)) - 1) / 9); }
-function priorityColor(val) { return heatRgb((val - 1) / (MAX_PRIORITY - 1)); }
-
 // Returns {bg, text} for date urgency (both due and next-action), else null.
 function dateUrgencyColor(dateStr) {
   if (!dateStr) return null;
@@ -483,14 +474,6 @@ const UI = (() => {
     });
     tr.addEventListener('focusin', () => clearTimeout(blurTimer));
 
-    let draftPriorityTd = null;
-    const refreshDraftPriority = () => {
-      if (draftPriorityTd) {
-        draftPriorityTd.textContent = draft.priority;
-        draftPriorityTd.style.background = priorityColor(draft.priority);
-      }
-    };
-
     for (const col of COLUMNS) {
       const td = document.createElement('td');
       td.dataset.key = col.key;
@@ -501,62 +484,16 @@ const UI = (() => {
           td.textContent = '+';
           break;
 
-        case 'impact': {
-          td.className = 'cell-impact';
-          td.style.background = impactColor(draft.impact);
-          td.style.color = '#1a1a1a';
-          const sel = document.createElement('select');
-          sel.className = 'cell-select';
-          sel.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
-          IMPACT_VALUES.forEach(v => {
-            const opt = document.createElement('option');
-            opt.value = v; opt.textContent = v;
-            opt.style.background = impactColor(v);
-            opt.style.color = '#1a1a1a';
-            if (v === draft.impact) opt.selected = true;
-            sel.appendChild(opt);
-          });
-          sel.addEventListener('change', e => {
-            draft.impact = Number(e.target.value);
-            draft.priority = draft.impact * draft.urgency;
-            td.style.background = impactColor(draft.impact);
-            refreshDraftPriority();
-          });
-          td.appendChild(sel);
-          break;
-        }
-
-        case 'urgency': {
-          td.className = 'cell-urgency';
-          td.style.background = urgencyColor(draft.urgency);
-          td.style.color = '#1a1a1a';
-          const sel = document.createElement('select');
-          sel.className = 'cell-select';
-          sel.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
-          for (let v = 1; v <= 10; v++) {
-            const opt = document.createElement('option');
-            opt.value = v; opt.textContent = v;
-            opt.style.background = urgencyColor(v);
-            opt.style.color = '#1a1a1a';
-            if (v === draft.urgency) opt.selected = true;
-            sel.appendChild(opt);
-          }
-          sel.addEventListener('change', e => {
-            draft.urgency = Number(e.target.value);
-            draft.priority = draft.impact * draft.urgency;
-            td.style.background = urgencyColor(draft.urgency);
-            refreshDraftPriority();
-          });
-          td.appendChild(sel);
-          break;
-        }
-
-        case 'priority': {
-          td.className = 'cell-priority';
-          draftPriorityTd = td;
-          td.textContent = draft.priority;
-          td.style.background = priorityColor(draft.priority);
-          td.style.color = '#fff';
+        case 'quadrant': {
+          td.className = 'cell-quadrant';
+          const renderBadge = () => {
+            const q = quadrantLabel(draft);
+            const st = QUADRANT_STYLE[q];
+            td.textContent = q;
+            td.style.background = st.bg;
+            td.style.color = st.text;
+          };
+          renderBadge();
           break;
         }
 
@@ -780,13 +717,6 @@ const UI = (() => {
       return;
     }
 
-    // Relative priority heatmap — scale to visible set
-    const priorities = tasks.map(t => t.priority || 1);
-    const minP = Math.min(...priorities);
-    const maxP = Math.max(...priorities);
-    const prioSpan = maxP > minP ? maxP - minP : 1;
-    const prioT = val => (val - minP) / prioSpan;
-
     for (const task of tasks) {
       const tr = document.createElement('tr');
       tr.dataset.uuid = task.uuid;
@@ -802,66 +732,13 @@ const UI = (() => {
             td.textContent = task[col.key];
             break;
 
-          case 'impact': {
-            td.className = 'cell-impact';
-            td.style.background = impactColor(task.impact || 1);
-            td.style.color = '#1a1a1a';
-            const selI = document.createElement('select');
-            selI.className = 'cell-select';
-            selI.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
-            IMPACT_VALUES.forEach(v => {
-              const opt = document.createElement('option');
-              opt.value = v; opt.textContent = v;
-              opt.style.background = impactColor(v);
-              opt.style.color = '#1a1a1a';
-              if (v === (task.impact || 1)) opt.selected = true;
-              selI.appendChild(opt);
-            });
-            selI.addEventListener('change', e => {
-              const newImpact = Number(e.target.value);
-              TaskStore.update(task.uuid, 'impact', newImpact);
-              const cur = TaskStore.getAll().find(t => t.uuid === task.uuid);
-              TaskStore.update(task.uuid, 'priority', newImpact * (cur?.urgency || 1));
-              FileManager.scheduleSave();
-              renderBody();
-            });
-            td.appendChild(selI);
-            break;
-          }
-
-          case 'urgency': {
-            td.className = 'cell-urgency';
-            td.style.background = urgencyColor(task.urgency || 5);
-            td.style.color = '#1a1a1a';
-            const selU = document.createElement('select');
-            selU.className = 'cell-select';
-            selU.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
-            for (let v = 1; v <= 10; v++) {
-              const opt = document.createElement('option');
-              opt.value = v; opt.textContent = v;
-              opt.style.background = urgencyColor(v);
-              opt.style.color = '#1a1a1a';
-              if (v === (task.urgency || 5)) opt.selected = true;
-              selU.appendChild(opt);
-            }
-            selU.addEventListener('change', e => {
-              const newUrgency = Number(e.target.value);
-              TaskStore.update(task.uuid, 'urgency', newUrgency);
-              const cur = TaskStore.getAll().find(t => t.uuid === task.uuid);
-              TaskStore.update(task.uuid, 'priority', (cur?.impact || 1) * newUrgency);
-              FileManager.scheduleSave();
-              renderBody();
-            });
-            td.appendChild(selU);
-            break;
-          }
-
-          case 'priority': {
-            td.className = 'cell-priority';
-            const p = task.priority || 1;
-            td.textContent = p;
-            td.style.background = heatRgb(prioT(p));
-            td.style.color = '#fff';
+          case 'quadrant': {
+            td.className = 'cell-quadrant';
+            const q = quadrantLabel(task);
+            const st = QUADRANT_STYLE[q];
+            td.textContent = q;
+            td.style.background = st.bg;
+            td.style.color = st.text;
             break;
           }
 
