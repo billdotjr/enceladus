@@ -453,6 +453,55 @@ const UI = (() => {
   const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
   let draft = DRAFT_DEFAULTS();
 
+  // ── Quadrant picker (shared by draft row + existing rows) ────────────────
+  let openPicker = null;
+
+  function closeQuadrantPicker() {
+    if (openPicker) {
+      openPicker.panel.remove();
+      document.removeEventListener('mousedown', openPicker.onOutsideClick, true);
+      document.removeEventListener('keydown', openPicker.onKeydown, true);
+      openPicker = null;
+    }
+  }
+
+  function openQuadrantPicker(anchorTd, onSelect) {
+    closeQuadrantPicker();
+
+    const panel = document.createElement('div');
+    panel.className = 'quadrant-picker';
+    QUADRANT_ORDER.forEach(q => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'qp-cell';
+      btn.textContent = q;
+      const st = QUADRANT_STYLE[q];
+      btn.style.background = st.bg;
+      btn.style.color = st.text;
+      btn.addEventListener('click', () => {
+        onSelect(q);
+        closeQuadrantPicker();
+      });
+      panel.appendChild(btn);
+    });
+    document.body.appendChild(panel);
+
+    const rect = anchorTd.getBoundingClientRect();
+    panel.style.left = `${rect.left + window.scrollX}px`;
+    panel.style.top  = `${rect.bottom + window.scrollY + 2}px`;
+
+    const onOutsideClick = e => { if (!panel.contains(e.target)) closeQuadrantPicker(); };
+    const onKeydown = e => { if (e.key === 'Escape') closeQuadrantPicker(); };
+    // Defer listener registration so the click that opened the picker
+    // (which is still bubbling) doesn't immediately close it.
+    setTimeout(() => {
+      document.addEventListener('mousedown', onOutsideClick, true);
+      document.addEventListener('keydown', onKeydown, true);
+    }, 0);
+
+    openPicker = { panel, onOutsideClick, onKeydown };
+  }
+
   function commitDraft() {
     if (!draft.name.trim()) return;
     TaskStore.add({ ...draft, labels: [...draft.labels] });
@@ -494,6 +543,13 @@ const UI = (() => {
             td.style.color = st.text;
           };
           renderBadge();
+          td.addEventListener('click', () => {
+            openQuadrantPicker(td, q => {
+              draft.important = (q === 'important' || q === 'urg&import');
+              draft.urgent    = (q === 'urgent'    || q === 'urg&import');
+              renderBadge();
+            });
+          });
           break;
         }
 
@@ -734,11 +790,25 @@ const UI = (() => {
 
           case 'quadrant': {
             td.className = 'cell-quadrant';
-            const q = quadrantLabel(task);
-            const st = QUADRANT_STYLE[q];
-            td.textContent = q;
-            td.style.background = st.bg;
-            td.style.color = st.text;
+            const applyBadge = t => {
+              const q = quadrantLabel(t);
+              const st = QUADRANT_STYLE[q];
+              td.textContent = q;
+              td.style.background = st.bg;
+              td.style.color = st.text;
+            };
+            applyBadge(task);
+            td.addEventListener('click', () => {
+              openQuadrantPicker(td, q => {
+                const important = (q === 'important' || q === 'urg&import');
+                const urgent    = (q === 'urgent'    || q === 'urg&import');
+                TaskStore.update(task.uuid, 'important', important);
+                TaskStore.update(task.uuid, 'urgent', urgent);
+                FileManager.scheduleSave();
+                const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
+                applyBadge(cur);
+              });
+            });
             break;
           }
 
