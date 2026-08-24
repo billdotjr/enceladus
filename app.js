@@ -403,32 +403,6 @@ const FilterController = (() => {
   return { set, apply, get, clear };
 })();
 
-// ── Heatmap colours ─────────────────────────────────────────────────────────
-// t in [0,1]: 0 = green, 0.5 = amber, 1 = red
-
-function heatColor(t) {
-  t = Math.min(1, Math.max(0, t));
-  let r, g, b;
-  if (t <= 0.5) {
-    const s = t / 0.5;
-    r = Math.round(76  + s * (255 - 76));
-    g = Math.round(175 + s * (152 - 175));
-    b = Math.round(80  + s * (0   - 80));
-  } else {
-    const s = (t - 0.5) / 0.5;
-    r = Math.round(255 + s * (244 - 255));
-    g = Math.round(152 + s * (67  - 152));
-    b = Math.round(0   + s * (54  - 0));
-  }
-  return [r, g, b];
-}
-
-function heatRgb(t)  { const [r,g,b] = heatColor(t); return `rgb(${r},${g},${b})`; }
-function heatPale(t) {
-  const [r,g,b] = heatColor(t);
-  return `rgb(${Math.round(r*0.4+255*0.6)},${Math.round(g*0.4+255*0.6)},${Math.round(b*0.4+255*0.6)})`;
-}
-
 // Returns {bg, text} for date urgency (both due and next-action), else null.
 function dateUrgencyColor(dateStr) {
   if (!dateStr) return null;
@@ -483,6 +457,9 @@ const UI = (() => {
       const st = QUADRANT_STYLE[q];
       btn.style.background = st.bg;
       btn.style.color = st.text;
+      // Prevent blur so clicking a quadrant doesn't shift focus away from
+      // the draft row and trigger a premature commit.
+      btn.addEventListener('mousedown', e => e.preventDefault());
       btn.addEventListener('click', () => {
         onSelect(q);
         closeQuadrantPicker();
@@ -548,6 +525,9 @@ const UI = (() => {
             td.style.color = st.text;
           };
           renderBadge();
+          // Prevent blur so the draft row isn't committed prematurely while
+          // the quadrant picker is open (same idiom as btnAdd below).
+          td.addEventListener('mousedown', e => e.preventDefault());
           td.addEventListener('click', () => {
             openQuadrantPicker(td, q => {
               draft.important = (q === 'important' || q === 'urg&import');
@@ -1037,6 +1017,7 @@ const UI = (() => {
   }
 
   function render() {
+    closeQuadrantPicker(); // backstop: never leave a picker orphaned by a full re-render
     buildColgroup();
     buildHeaders();
     buildFilterRow();

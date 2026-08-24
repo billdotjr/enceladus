@@ -71,8 +71,6 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | `status: "Done"` | renamed to `"Closed"` |
 | missing `createdAt` | set to `""` |
 | `createdAt` as ISO datetime | truncated to date (`YYYY-MM-DD`) |
-| missing `impact` / `urgency` | defaulted to `1` / `5` |
-| stored `priority` | always recomputed as `impact × urgency` on load |
 | `impact`/`urgency`/`priority` (numeric) | converted to `important`/`urgent` booleans: `important = impact !== 1`, `urgent = urgency !== 5` (old defaults); old fields deleted |
 
 ## UI Modules (all in `app.js`)
@@ -118,11 +116,6 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | Closed | Dark grey |
 
 The status filter defaults to `!closed` (active tasks only).
-
-## Heatmap Colours
-
-`heatColor(t)` maps `t ∈ [0, 1]` → `[r, g, b]` along green → amber → red. Used
-for Due / Next Action date highlighting (`dateUrgencyColor`).
 
 ## Priority Quadrants
 
