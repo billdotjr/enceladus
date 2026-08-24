@@ -55,7 +55,7 @@ enceladus/
     "description": "Longer description",
     "nextAction": "Send email",
     "contact": "Jane Doe",
-    "labels": ["work", "urgent"],
+    "topic": "work",
     "status": "In Progress"
   }
 ]
@@ -72,6 +72,7 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | missing `createdAt` | set to `""` |
 | `createdAt` as ISO datetime | truncated to date (`YYYY-MM-DD`) |
 | `impact`/`urgency`/`priority` (numeric) | converted to `important`/`urgent` booleans: `important = impact !== 1`, `urgent = urgency !== 5` (old defaults); old fields deleted |
+| `labels` (array) | converted to a single `topic` string: `'private'` anywhere in the array wins (`topic = 'Private'`), otherwise the first label is used, or `''` if none |
 
 ## UI Modules (all in `app.js`)
 
@@ -82,7 +83,7 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | `FileManager` | Open / create / reopen / auto-save JSON via File System Access API |
 | `SortController` | Click-to-sort on any column header (asc → desc → off cycle) |
 | `FilterController` | Per-column filter inputs; default hides Closed tasks (`!closed`) |
-| `UI` | Renders `<table>`, draft row, inline editing, heatmap colouring |
+| `UI` | Renders `<table>`, draft row, inline editing, quadrant/topic popups |
 | `ThemeController` | Dark/light toggle, persists to `localStorage` |
 
 ## Columns
@@ -93,12 +94,12 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | `priority` | Priority | quadrant | One of `base`/`important`/`urgent`/`urg&import`, picked via a 2×2 matrix popup (click the cell). Colour-coded badge. |
 | `createdAt` | Created | date | Set to today on task creation |
 | `dueDate` | Due | date | Optional; faint placeholder when empty |
+| `topic` | Topic | topic | Single string; search-as-you-type combobox (click cell), create-on-the-fly, top-8-by-frequency suggestions, DJB2 hash colour |
 | `name` | Name | text | Bold; required to commit draft |
 | `description` | Description | text | Free text |
 | `nextActionDate` | Next action | date | Optional; faint placeholder when empty |
 | `nextAction` | Next action | text | Free text |
 | `contact` | Contact | text | Free text |
-| `labels` | Label | chips | Array; DJB2 hash colour per label; drag-to-reorder; datalist autocomplete |
 | `status` | Status | select | See statuses below |
 | _(delete)_ | — | button | Per-row trash icon |
 
@@ -137,13 +138,16 @@ vertical (top = yes), Urgent axis horizontal (right = yes); Important+Urgent
 
 - **Edit**: click any editable cell → `contenteditable` or `<input>`/`<select>`
 - **New task**: draft row is always visible at the top of the table; fill in Name
-  and press Enter, Tab (from the label field), or click ＋ to commit
-- **Labels**: type in the `+` input and press Enter / `,` / `;` to add a chip;
-  drag chips to reorder; click × to remove; Tab from the draft label field commits the task
+  and press Enter, or click ＋ to commit
+- **Topic**: click the cell to edit — text input opens with the current value
+  selected, plus a dropdown of the 8 most-frequent existing topics (or filtered
+  matches as you type); click a suggestion, press Enter, or click elsewhere to
+  commit; a `Create "…"` row appears when nothing matches; Escape cancels
+  without changing the value
 - **Delete**: trash icon per row (confirm dialog)
-- **Sort**: click column header → asc → desc → off; labels sort by first chip (user-defined order).
+- **Sort**: click column header → asc → desc → off; topic sorts alphabetically (plain string comparison).
   Default sort on load: Next Action date ascending; tasks with no date sort last in either direction
-- **Filter**: second header row with `<input>` per column; label column shows datalist;
+- **Filter**: second header row with `<input>` per column; topic column shows datalist autocomplete;
   ✕ button at the end of the filter row resets all filters to the default (`status: !closed`)
 - **Refresh**: ↻ button in topbar resets sort and filters to defaults
   (Next Action ascending, `status: !closed`) and re-renders — no page reload or file reopen needed

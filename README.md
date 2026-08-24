@@ -8,8 +8,8 @@ A private, client-side-only todo list app. No server, no accounts, no data ever 
 - **Inline editing** — click any cell to edit; changes auto-save after 500 ms
 - **Status workflow** — Today · Workable · In Progress · New · Pending feedback · Meeting scheduled · On-Hold · Closed, each colour-coded by urgency
 - **Date urgency highlighting** — Due and Next Action dates turn blue (today), pale blue (tomorrow), or red (overdue)
-- **Labels** — free-form chips with drag-to-reorder, autocomplete, and DJB2 hash colours
-- **Private section** — tasks tagged `private` appear in a separate table below the main list
+- **Topic** — single-select field with search-as-you-type, create-on-the-fly, and dynamic DJB2 hash colours
+- **Private section** — tasks with Topic `Private` appear in a separate table below the main list
 - **Per-column filtering and sorting** — status filter defaults to hiding Closed tasks
 - **Dark / light theme** — toggled in the topbar, persisted to `localStorage`
 - **Auto-save** — via the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API); falls back to manual Save button on unsupported browsers
@@ -26,7 +26,7 @@ A private, client-side-only todo list app. No server, no accounts, no data ever 
 
 1. Open `index.html` in a Chromium-based browser (Chrome, Edge, Arc — Firefox does not support the File System Access API)
 2. Choose **Create new file** to start fresh, or **Open existing file** to load a `tasks.json`
-3. Fill in the draft row at the top of the table and press **Enter** (or **Tab** from the Label field) to add a task
+3. Fill in the draft row at the top of the table and press **Enter** (or click ＋) to add a task
 4. Click any cell to edit it inline — changes save automatically
 
 ## Browser support
@@ -55,7 +55,7 @@ Tasks are stored as a plain JSON array in a file of your choosing:
     "description": "Longer description",
     "nextAction": "Send email",
     "contact": "Jane Doe",
-    "labels": ["work", "urgent"],
+    "topic": "work",
     "status": "In Progress"
   }
 ]
@@ -64,6 +64,9 @@ Tasks are stored as a plain JSON array in a file of your choosing:
 The loader migrates older formats transparently (single `tag` string → `labels` array, `"Done"` → `"Closed"`, etc.).
 `impact`/`urgency`/numeric `priority` from older files are migrated to
 `important`/`urgent` booleans on first load.
+Older `labels` arrays are migrated to a single `topic` string on first load
+(a `'private'` label anywhere in the array wins; otherwise the first label is
+used).
 
 ## Running locally
 
