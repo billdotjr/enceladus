@@ -157,7 +157,7 @@ col.col-name           { width: 280px; }
 col.col-description    { width: 320px; }
 col.col-nextAction     { width: 280px; }
 col.col-contact        { width: 90px; }
-col.col-labels         { width: 140px; }
+col.col-topic           { width: 140px; }
 col.col-status         { width: 108px; }
 col.col-del            { width: 28px; }
 
@@ -352,60 +352,12 @@ td.draft-id {
 }
 .btn-draft-commit:hover { color: var(--accent-hover); }
 
-/* ── Label chips ──────────────────────────────────────────── */
-td.cell-labels { padding: 3px 4px; overflow: visible; white-space: normal; }
-
-.label-cell {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  align-items: center;
-  min-height: 22px;
-}
-
-.label-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 5px 1px 7px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #fff;
-  white-space: nowrap;
-  line-height: 1.6;
-}
-
-.label-chip.dragging  { opacity: 0.35; cursor: grabbing; }
-.label-chip.drag-over { outline: 2px solid rgba(255,255,255,0.8); outline-offset: 1px; }
-.label-chip[draggable="true"] { cursor: grab; }
-
-.label-chip-x {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.75);
+/* ── Topic badge ──────────────────────────────────────────── */
+td.cell-topic {
+  font-weight: 600;
   cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 0 1px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
+  border-radius: var(--radius);
 }
-.label-chip-x:hover { color: #fff; }
-
-.label-input {
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  font-family: var(--font);
-  outline: none;
-  width: 36px;
-  min-width: 36px;
-  padding: 1px 2px;
-}
-.label-input:focus { width: 80px; border-bottom: 1px solid var(--accent); }
 
 /* ── Startup modal ────────────────────────────────────────── */
 .startup-modal {

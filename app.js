@@ -46,12 +46,12 @@ const COLUMNS = [
   { key: 'priority',       label: 'Priority',       type: 'quadrant',  sortable: true  },
   { key: 'createdAt',      label: 'Created',        type: 'date',      sortable: true  },
   { key: 'dueDate',        label: 'Due',            type: 'date',      sortable: true  },
+  { key: 'topic',          label: 'Topic',          type: 'topic',     sortable: true  },
   { key: 'name',           label: 'Name',           type: 'text',      sortable: true  },
   { key: 'description',    label: 'Description',    type: 'text',      sortable: false },
   { key: 'nextActionDate', label: 'Next action',    type: 'date',      sortable: true  },
   { key: 'nextAction',     label: 'Next action',    type: 'text',      sortable: false },
   { key: 'contact',        label: 'Contact',        type: 'text',      sortable: true  },
-  { key: 'labels',         label: 'Label',          type: 'labels',    sortable: true  },
   { key: 'status',         label: 'Status',         type: 'status',    sortable: true  },
 ];
 
@@ -82,7 +82,6 @@ const TaskStore = (() => {
       description: '',
       nextAction: '',
       contact: '',
-      labels: [],
       topic: '',
       status: 'New',
     };
@@ -103,6 +102,7 @@ const TaskStore = (() => {
         const privateLabel = task.labels.find(l => l.toLowerCase() === 'private');
         task.topic = privateLabel ? 'Private' : (task.labels[0] || '');
       }
+      delete task.labels;
       // Migrate old "Done" status to "Closed"
       if (task.status === 'Done') task.status = 'Closed';
       // Migrate missing createdAt; truncate old ISO datetime to date
@@ -447,7 +447,7 @@ function labelColor(text) {
 
 const UI = (() => {
   // ── Draft row (new task input) ────────────────────────────────────────────
-  const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], topic: '', status: 'New' });
+  const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', topic: '', status: 'New' });
   let draft = DRAFT_DEFAULTS();
 
   // ── Quadrant picker (shared by draft row + existing rows) ────────────────
@@ -504,7 +504,7 @@ const UI = (() => {
 
   function commitDraft() {
     if (!draft.name.trim()) return;
-    TaskStore.add({ ...draft, labels: [...draft.labels] });
+    TaskStore.add({ ...draft });
     FileManager.scheduleSave();
     draft = DRAFT_DEFAULTS();
     render();
@@ -576,33 +576,16 @@ const UI = (() => {
           break;
         }
 
-        case 'labels': {
-          td.className = 'cell-labels';
-          const inp = document.createElement('input');
-          inp.type = 'text'; inp.className = 'cell-input';
-          inp.placeholder = 'Labels…';
-          inp.setAttribute('list', 'labels-datalist');
-          inp.value = draft.labels.join(', ');
-          inp.addEventListener('change', e => {
-            draft.labels = e.target.value.split(/[,;]/).map(s => s.trim()).filter(Boolean);
-          });
-          let tabPending = false;
-          inp.addEventListener('keydown', e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              const raw = inp.value.trim();
-              if (raw) draft.labels = [...new Set(raw.split(/[,;]/).map(s => s.trim()).filter(Boolean))];
-              commitDraft();
-            } else if (e.key === 'Tab') {
-              const raw = inp.value.trim();
-              if (raw) draft.labels = [...new Set(raw.split(/[,;]/).map(s => s.trim()).filter(Boolean))];
-              tabPending = true;
-            }
-          });
-          inp.addEventListener('blur', () => {
-            if (tabPending) { tabPending = false; commitDraft(); }
-          });
-          td.appendChild(inp);
+        case 'topic': {
+          td.className = 'cell-topic';
+          td.textContent = draft.topic || '';
+          if (draft.topic) {
+            td.style.background = labelColor(draft.topic);
+            td.style.color = '#fff';
+          } else {
+            td.style.background = '';
+            td.style.color = '';
+          }
           break;
         }
 
@@ -847,124 +830,16 @@ const UI = (() => {
             break;
           }
 
-          case 'labels': {
-            td.className = 'cell-labels';
-            const wrap = document.createElement('div');
-            wrap.className = 'label-cell';
-
-            const getLabels = () => {
-              const t = TaskStore.getAll().find(x => x.uuid === task.uuid);
-              return t ? (t.labels || []) : [];
-            };
-
-            const inp = document.createElement('input');
-            inp.type = 'text';
-            inp.className = 'label-input';
-            inp.placeholder = '+';
-            inp.setAttribute('list', 'labels-datalist');
-
-            const renderChips = () => {
-              wrap.querySelectorAll('.label-chip').forEach(c => c.remove());
-              getLabels().forEach(lbl => {
-                const chip = document.createElement('span');
-                chip.className = 'label-chip';
-                chip.style.background = labelColor(lbl);
-                chip.draggable = true;
-
-                chip.addEventListener('dragstart', e => {
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', lbl);
-                  chip.classList.add('dragging');
-                });
-                chip.addEventListener('dragend', () => {
-                  chip.classList.remove('dragging');
-                  wrap.querySelectorAll('.label-chip').forEach(c => c.classList.remove('drag-over'));
-                });
-                chip.addEventListener('dragover', e => {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = 'move';
-                  if (!chip.classList.contains('dragging')) {
-                    wrap.querySelectorAll('.label-chip').forEach(c => c.classList.remove('drag-over'));
-                    chip.classList.add('drag-over');
-                  }
-                });
-                chip.addEventListener('dragleave', () => chip.classList.remove('drag-over'));
-                chip.addEventListener('drop', e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const from = e.dataTransfer.getData('text/plain');
-                  if (from === lbl) return;
-                  const labels = getLabels();
-                  const fi = labels.indexOf(from);
-                  const ti = labels.indexOf(lbl);
-                  if (fi === -1 || ti === -1) return;
-                  const reordered = [...labels];
-                  reordered.splice(fi, 1);
-                  reordered.splice(ti, 0, from);
-                  TaskStore.update(task.uuid, 'labels', reordered);
-                  FileManager.scheduleSave();
-                  renderChips();
-                });
-
-                const txt = document.createElement('span');
-                txt.textContent = lbl;
-                chip.appendChild(txt);
-                const x = document.createElement('button');
-                x.className = 'label-chip-x';
-                x.textContent = '×';
-                x.addEventListener('click', () => {
-                  TaskStore.update(task.uuid, 'labels', getLabels().filter(l => l !== lbl));
-                  FileManager.scheduleSave();
-                  renderChips();
-                  refreshLabelDatalist();
-                });
-                chip.appendChild(x);
-                wrap.insertBefore(chip, inp);
-              });
-            };
-
-            // Drop on empty space after last chip → move to end
-            wrap.addEventListener('dragover', e => e.preventDefault());
-            wrap.addEventListener('drop', e => {
-              e.preventDefault();
-              const from = e.dataTransfer.getData('text/plain');
-              if (!from) return;
-              const labels = getLabels();
-              const fi = labels.indexOf(from);
-              if (fi === -1 || fi === labels.length - 1) return;
-              const reordered = [...labels];
-              reordered.splice(fi, 1);
-              reordered.push(from);
-              TaskStore.update(task.uuid, 'labels', reordered);
-              FileManager.scheduleSave();
-              renderChips();
-            });
-
-            const commit = () => {
-              const val = inp.value.replace(/[,;]/g, '').trim();
-              if (val && !getLabels().includes(val)) {
-                TaskStore.update(task.uuid, 'labels', [...getLabels(), val]);
-                FileManager.scheduleSave();
-                refreshLabelDatalist();
-              }
-              inp.value = '';
-              renderChips();
-            };
-
-            inp.addEventListener('keydown', e => {
-              if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
-                e.preventDefault();
-                commit();
-              }
-            });
-            inp.addEventListener('input', () => {
-              if (inp.value.endsWith(',') || inp.value.endsWith(';')) commit();
-            });
-            inp.addEventListener('change', () => commit());
-
-            wrap.appendChild(inp);
-            renderChips();
-            td.appendChild(wrap);
+          case 'topic': {
+            td.className = 'cell-topic';
+            td.textContent = task.topic || '';
+            if (task.topic) {
+              td.style.background = labelColor(task.topic);
+              td.style.color = '#fff';
+            } else {
+              td.style.background = '';
+              td.style.color = '';
+            }
             break;
           }
 
@@ -1023,7 +898,7 @@ const UI = (() => {
       tdDel.appendChild(btnDel);
       tr.appendChild(tdDel);
 
-      const isPrivate = task.labels.some(l => l.toLowerCase() === 'private');
+      const isPrivate = !!task.topic && task.topic.toLowerCase() === 'private';
       (isPrivate ? privateBody : tbody).appendChild(tr);
     }
     document.getElementById('private-wrapper').classList.toggle('hidden', privateBody.childElementCount === 0);
