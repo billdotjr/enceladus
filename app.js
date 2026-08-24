@@ -388,6 +388,7 @@ const FilterController = (() => {
     return tasks.filter(task =>
       Object.entries(filters).every(([k, v]) => {
         if (!v) return true;
+        if (k === 'priority') return quadrantLabel(task) === v;
         const cell = String(task[k] ?? '').toLowerCase();
         if (v.startsWith('!')) return cell !== v.slice(1);
         return cell.includes(v);
@@ -701,6 +702,16 @@ const UI = (() => {
         sel.innerHTML = `<option value="">All</option>` +
           `<option value="!closed">Active (hide Closed)</option>` +
           STATUSES.map(s => `<option value="${s.toLowerCase()}">${s}</option>`).join('');
+        sel.value = FilterController.get(col.key);
+        sel.addEventListener('change', e => {
+          FilterController.set(col.key, e.target.value);
+          renderBody();
+        });
+        th.appendChild(sel);
+      } else if (col.type === 'quadrant') {
+        const sel = document.createElement('select');
+        sel.innerHTML = `<option value="">All</option>` +
+          QUADRANT_ORDER.map(q => `<option value="${q}">${q}</option>`).join('');
         sel.value = FilterController.get(col.key);
         sel.addEventListener('change', e => {
           FilterController.set(col.key, e.target.value);
