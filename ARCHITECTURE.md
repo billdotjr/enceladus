@@ -46,9 +46,8 @@ enceladus/
   {
     "uuid": "xxxxxxxx-xxxx-...",
     "id": 1,
-    "impact": 8,
-    "urgency": 7,
-    "priority": 56,
+    "important": true,
+    "urgent": true,
     "createdAt": "2026-05-20",
     "dueDate": "2026-06-01",
     "nextActionDate": "2026-05-25",
@@ -74,6 +73,7 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | `createdAt` as ISO datetime | truncated to date (`YYYY-MM-DD`) |
 | missing `impact` / `urgency` | defaulted to `1` / `5` |
 | stored `priority` | always recomputed as `impact × urgency` on load |
+| `impact`/`urgency`/`priority` (numeric) | converted to `important`/`urgent` booleans: `important = impact !== 1`, `urgent = urgency !== 5` (old defaults); old fields deleted |
 
 ## UI Modules (all in `app.js`)
 
@@ -92,9 +92,7 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | Key | Display | Type | Notes |
 |-----|---------|------|-------|
 | `id` | # | readonly | Auto-increment |
-| `impact` | Impact | select | Powers of 2: 1, 2, 4, 8, 16, 32, 64, 128. Pale heatmap. |
-| `urgency` | Urgency | select | 1–10. Pale heatmap. |
-| `priority` | Priority | computed | `impact × urgency` (5–1280). Full-saturation heatmap, relative to visible rows. Read-only. |
+| `priority` | Priority | quadrant | One of `base`/`important`/`urgent`/`urg&import`, picked via a 2×2 matrix popup (click the cell). Colour-coded badge. |
 | `createdAt` | Created | date | Set to today on task creation |
 | `dueDate` | Due | date | Optional; faint placeholder when empty |
 | `name` | Name | text | Bold; required to commit draft |
@@ -123,11 +121,24 @@ The status filter defaults to `!closed` (active tasks only).
 
 ## Heatmap Colours
 
-`heatColor(t)` maps `t ∈ [0, 1]` → `[r, g, b]` along green → amber → red.
+`heatColor(t)` maps `t ∈ [0, 1]` → `[r, g, b]` along green → amber → red. Used
+for Due / Next Action date highlighting (`dateUrgencyColor`).
 
-- **Impact / Urgency**: `heatPale` — 40% colour + 60% white (pastel). Dark text.
-- **Priority**: `heatRgb` — full saturation. White text. Range is relative to the
-  currently visible task set (min–max), so contrast is always maximised.
+## Priority Quadrants
+
+Priority is stored as two booleans, `important` and `urgent`, and displayed as
+one of four colour-coded badges:
+
+| Quadrant     | Colour |
+|--------------|--------|
+| `base`       | Green  |
+| `important`  | Blue   |
+| `urgent`     | Orange |
+| `urg&import` | Red    |
+
+Clicking the Priority cell opens a 2×2 matrix picker — Important axis
+vertical (top = yes), Urgent axis horizontal (right = yes); Important+Urgent
+(`urg&import`) is the top-right cell — to set both booleans at once.
 
 ## Interaction Model
 

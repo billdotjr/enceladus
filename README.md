@@ -4,7 +4,7 @@ A private, client-side-only todo list app. No server, no accounts, no data ever 
 
 ## Features
 
-- **Eisenhower-style prioritisation** — Impact (powers of 2) × Urgency (1–10) = Priority, visualised with a full heatmap
+- **Eisenhower-quadrant prioritisation** — pick `base` / `important` / `urgent` / `urg&import` from a colour-coded 2×2 matrix popup
 - **Inline editing** — click any cell to edit; changes auto-save after 500 ms
 - **Status workflow** — Today · Workable · In Progress · New · Pending feedback · Meeting scheduled · On-Hold · Closed, each colour-coded by urgency
 - **Date urgency highlighting** — Due and Next Action dates turn blue (today), pale blue (tomorrow), or red (overdue)
@@ -46,9 +46,8 @@ Tasks are stored as a plain JSON array in a file of your choosing:
   {
     "uuid": "xxxxxxxx-xxxx-...",
     "id": 1,
-    "impact": 8,
-    "urgency": 7,
-    "priority": 56,
+    "important": true,
+    "urgent": true,
     "createdAt": "2026-05-20",
     "dueDate": "2026-06-01",
     "nextActionDate": "2026-05-25",
@@ -63,6 +62,8 @@ Tasks are stored as a plain JSON array in a file of your choosing:
 ```
 
 The loader migrates older formats transparently (single `tag` string → `labels` array, `"Done"` → `"Closed"`, etc.).
+`impact`/`urgency`/numeric `priority` from older files are migrated to
+`important`/`urgent` booleans on first load.
 
 ## Running locally
 
