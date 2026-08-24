@@ -345,8 +345,12 @@ const SortController = (() => {
     return [...tasks].sort((a, b) => {
       let av = a[sortKey], bv = b[sortKey];
       // numeric
-      if (sortKey === 'id' || sortKey === 'priority') {
+      if (sortKey === 'id') {
         av = Number(av) || 0; bv = Number(bv) || 0;
+      }
+      // priority: rank by quadrant (base=0 ... urg&import=3), not the old numeric field
+      if (sortKey === 'priority') {
+        av = quadrantRank(a); bv = quadrantRank(b);
       }
       // labels: sort by first label as ordered in the cell; no labels sorts last
       if (sortKey === 'labels') {
