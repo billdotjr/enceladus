@@ -548,8 +548,8 @@ const UI = (() => {
       panel.style.minWidth = `${rect.width}px`;
     }
 
-    function renderList() {
-      const query = inp.value.trim();
+    function renderList(forceTop8) {
+      const query = forceTop8 ? '' : inp.value.trim();
       const lower = query.toLowerCase();
       const counts = TaskStore.topicCounts();
       const matches = lower
@@ -600,7 +600,7 @@ const UI = (() => {
       onCommit(null);
     }
 
-    inp.addEventListener('input', renderList);
+    inp.addEventListener('input', () => renderList());
     inp.addEventListener('keydown', e => {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -627,7 +627,7 @@ const UI = (() => {
       finish(resolveValue(val));
     });
 
-    renderList();
+    renderList(true);
     inp.focus();
     inp.select();
 
