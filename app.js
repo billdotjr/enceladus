@@ -83,6 +83,7 @@ const TaskStore = (() => {
       nextAction: '',
       contact: '',
       labels: [],
+      topic: '',
       status: 'New',
     };
   }
@@ -94,6 +95,13 @@ const TaskStore = (() => {
       if (!Array.isArray(task.labels)) {
         task.labels = task.tag ? [task.tag] : [];
         delete task.tag;
+      }
+      // Migrate old multi-value labels array to a single topic string.
+      // 'private' anywhere in the old labels wins (keeps private-section
+      // membership); otherwise take the first label; no labels -> ''.
+      if (typeof task.topic !== 'string') {
+        const privateLabel = task.labels.find(l => l.toLowerCase() === 'private');
+        task.topic = privateLabel ? 'Private' : (task.labels[0] || '');
       }
       // Migrate old "Done" status to "Closed"
       if (task.status === 'Done') task.status = 'Closed';
@@ -138,9 +146,19 @@ const TaskStore = (() => {
     return [...new Set(tasks.flatMap(t => t.labels || []).filter(Boolean))].sort();
   }
 
+  function topicCounts() {
+    const counts = new Map();
+    for (const t of tasks) {
+      if (t.topic) counts.set(t.topic, (counts.get(t.topic) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([topic, count]) => ({ topic, count }))
+      .sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic));
+  }
+
   function toJSON() { return JSON.stringify(tasks, null, 2); }
 
-  return { load, add, remove, update, getAll, allLabels, toJSON };
+  return { load, add, remove, update, getAll, allLabels, topicCounts, toJSON };
 })();
 
 // ── IDB handle store ────────────────────────────────────────────────────────
@@ -429,7 +447,7 @@ function labelColor(text) {
 
 const UI = (() => {
   // ── Draft row (new task input) ────────────────────────────────────────────
-  const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
+  const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], topic: '', status: 'New' });
   let draft = DRAFT_DEFAULTS();
 
   // ── Quadrant picker (shared by draft row + existing rows) ────────────────
