@@ -142,10 +142,6 @@ const TaskStore = (() => {
 
   function getAll()  { return tasks; }
 
-  function allLabels() {
-    return [...new Set(tasks.flatMap(t => t.labels || []).filter(Boolean))].sort();
-  }
-
   function topicCounts() {
     const counts = new Map();
     for (const t of tasks) {
@@ -158,7 +154,7 @@ const TaskStore = (() => {
 
   function toJSON() { return JSON.stringify(tasks, null, 2); }
 
-  return { load, add, remove, update, getAll, allLabels, topicCounts, toJSON };
+  return { load, add, remove, update, getAll, topicCounts, toJSON };
 })();
 
 // ── IDB handle store ────────────────────────────────────────────────────────
@@ -369,11 +365,6 @@ const SortController = (() => {
       // priority: rank by quadrant (base=0 ... urg&import=3), not the old numeric field
       if (sortKey === 'priority') {
         av = quadrantRank(a); bv = quadrantRank(b);
-      }
-      // labels: sort by first label as ordered in the cell; no labels sorts last
-      if (sortKey === 'labels') {
-        av = Array.isArray(av) && av.length ? av[0].toLowerCase() : '￿';
-        bv = Array.isArray(bv) && bv.length ? bv[0].toLowerCase() : '￿';
       }
       // date strings sort lexicographically correctly (ISO format);
       // empty dates always sort last regardless of direction
@@ -850,8 +841,8 @@ const UI = (() => {
         inp.type = 'search';
         inp.placeholder = col.label;
         inp.value = FilterController.get(col.key);
-        if (col.type === 'labels') {
-          inp.setAttribute('list', 'labels-datalist');
+        if (col.type === 'topic') {
+          inp.setAttribute('list', 'topic-datalist');
         }
         inp.addEventListener('input', e => {
           FilterController.set(col.key, e.target.value);
@@ -875,19 +866,19 @@ const UI = (() => {
     });
     thClear.appendChild(btnClear);
     row.appendChild(thClear);
-    refreshLabelDatalist();
+    refreshTopicDatalist();
   }
 
-  function refreshLabelDatalist() {
-    let dl = document.getElementById('labels-datalist');
+  function refreshTopicDatalist() {
+    let dl = document.getElementById('topic-datalist');
     if (!dl) {
       dl = document.createElement('datalist');
-      dl.id = 'labels-datalist';
+      dl.id = 'topic-datalist';
       document.body.appendChild(dl);
     }
-    dl.replaceChildren(...TaskStore.allLabels().map(l => {
+    dl.replaceChildren(...TaskStore.topicCounts().map(c => {
       const opt = document.createElement('option');
-      opt.value = l;
+      opt.value = c.topic;
       return opt;
     }));
   }
