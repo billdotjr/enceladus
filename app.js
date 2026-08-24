@@ -502,6 +502,140 @@ const UI = (() => {
     openPicker = { panel, onOutsideClick, onKeydown };
   }
 
+  // ── Topic combobox (shared by draft row + existing rows) ─────────────────
+  let openCombobox = null;
+
+  function closeTopicCombobox() {
+    if (openCombobox) {
+      openCombobox.cleanup();
+      openCombobox = null;
+    }
+  }
+
+  function openTopicCombobox(anchorTd, currentValue, onCommit) {
+    closeTopicCombobox();
+
+    let settled = false;
+
+    anchorTd.textContent = '';
+    anchorTd.style.background = '';
+    anchorTd.style.color = '';
+
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'cell-input';
+    inp.value = currentValue || '';
+    anchorTd.appendChild(inp);
+
+    const panel = document.createElement('div');
+    panel.className = 'topic-combobox';
+    document.body.appendChild(panel);
+
+    let items = []; // [{ create: bool, value: string }]
+    let highlighted = -1;
+
+    function resolveValue(raw) {
+      // Case-insensitive snap to an existing topic's canonical casing, so
+      // typing "work" when "Work" already exists doesn't create a duplicate.
+      const match = TaskStore.topicCounts().find(c => c.topic.toLowerCase() === raw.toLowerCase());
+      return match ? match.topic : raw;
+    }
+
+    function positionPanel() {
+      const rect = anchorTd.getBoundingClientRect();
+      panel.style.left = `${rect.left + window.scrollX}px`;
+      panel.style.top = `${rect.bottom + window.scrollY + 2}px`;
+      panel.style.minWidth = `${rect.width}px`;
+    }
+
+    function renderList() {
+      const query = inp.value.trim();
+      const lower = query.toLowerCase();
+      const counts = TaskStore.topicCounts();
+      const matches = lower
+        ? counts.filter(c => c.topic.toLowerCase().includes(lower))
+        : counts.slice(0, 8);
+      items = matches.map(c => ({ create: false, value: c.topic }));
+      const exactMatch = counts.some(c => c.topic.toLowerCase() === lower);
+      if (query && !exactMatch) items.push({ create: true, value: query });
+
+      highlighted = -1;
+      panel.innerHTML = '';
+      items.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'tc-row' + (item.create ? ' tc-row-create' : '');
+        if (item.create) {
+          row.textContent = `Create "${item.value}"`;
+        } else {
+          row.textContent = item.value;
+          row.style.background = labelColor(item.value);
+          row.style.color = '#fff';
+        }
+        row.addEventListener('mousedown', e => {
+          e.preventDefault(); // keep the input focused; commit directly here
+          finish(item.value);
+        });
+        panel.appendChild(row);
+      });
+      positionPanel();
+    }
+
+    function updateHighlight() {
+      [...panel.children].forEach((row, i) => {
+        row.classList.toggle('tc-row-highlighted', i === highlighted);
+      });
+    }
+
+    function finish(value) {
+      settled = true;
+      panel.remove();
+      openCombobox = null;
+      onCommit(value);
+    }
+
+    function cancel() {
+      settled = true;
+      panel.remove();
+      openCombobox = null;
+      onCommit(null);
+    }
+
+    inp.addEventListener('input', renderList);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (items.length) { highlighted = Math.min(highlighted + 1, items.length - 1); updateHighlight(); }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (items.length) { highlighted = Math.max(highlighted - 1, 0); updateHighlight(); }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlighted >= 0 && items[highlighted]) {
+          finish(items[highlighted].value);
+        } else {
+          const val = inp.value.trim();
+          if (val) finish(resolveValue(val));
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancel();
+      }
+    });
+    inp.addEventListener('blur', () => {
+      if (settled) return; // already handled by a row mousedown or Escape
+      const val = inp.value.trim();
+      finish(resolveValue(val));
+    });
+
+    renderList();
+    inp.focus();
+    inp.select();
+
+    openCombobox = {
+      cleanup: () => { if (!settled) { settled = true; panel.remove(); } }
+    };
+  }
+
   function commitDraft() {
     if (!draft.name.trim()) return;
     TaskStore.add({ ...draft });
@@ -578,14 +712,26 @@ const UI = (() => {
 
         case 'topic': {
           td.className = 'cell-topic';
-          td.textContent = draft.topic || '';
-          if (draft.topic) {
-            td.style.background = labelColor(draft.topic);
-            td.style.color = '#fff';
-          } else {
-            td.style.background = '';
-            td.style.color = '';
-          }
+          const renderBadge = () => {
+            td.textContent = draft.topic || '';
+            if (draft.topic) {
+              td.style.background = labelColor(draft.topic);
+              td.style.color = '#fff';
+            } else {
+              td.style.background = '';
+              td.style.color = '';
+            }
+          };
+          renderBadge();
+          // Prevent blur so the draft row isn't committed prematurely while
+          // the combobox is open (same idiom as the quadrant picker above).
+          td.addEventListener('mousedown', e => e.preventDefault());
+          td.addEventListener('click', () => {
+            openTopicCombobox(td, draft.topic, value => {
+              if (value !== null) draft.topic = value;
+              renderBadge();
+            });
+          });
           break;
         }
 
@@ -832,14 +978,27 @@ const UI = (() => {
 
           case 'topic': {
             td.className = 'cell-topic';
-            td.textContent = task.topic || '';
-            if (task.topic) {
-              td.style.background = labelColor(task.topic);
-              td.style.color = '#fff';
-            } else {
-              td.style.background = '';
-              td.style.color = '';
-            }
+            const applyBadge = t => {
+              td.textContent = t.topic || '';
+              if (t.topic) {
+                td.style.background = labelColor(t.topic);
+                td.style.color = '#fff';
+              } else {
+                td.style.background = '';
+                td.style.color = '';
+              }
+            };
+            applyBadge(task);
+            td.addEventListener('click', () => {
+              openTopicCombobox(td, task.topic, value => {
+                if (value !== null) {
+                  TaskStore.update(task.uuid, 'topic', value);
+                  FileManager.scheduleSave();
+                }
+                const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
+                applyBadge(cur);
+              });
+            });
             break;
           }
 
@@ -911,6 +1070,7 @@ const UI = (() => {
 
   function render() {
     closeQuadrantPicker(); // backstop: never leave a picker orphaned by a full re-render
+    closeTopicCombobox();  // same backstop, for the topic combobox
     buildColgroup();
     buildHeaders();
     buildFilterRow();
