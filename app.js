@@ -503,7 +503,7 @@ const UI = (() => {
     }
   }
 
-  function openTopicCombobox(anchorTd, currentValue, onCommit) {
+  function openTopicCombobox(anchorTd, currentValue, onCommit, restoreBadge) {
     closeTopicCombobox();
 
     let settled = false;
@@ -580,6 +580,7 @@ const UI = (() => {
     function finish(value) {
       settled = true;
       panel.remove();
+      document.removeEventListener('mousedown', onOutsideClick, true);
       openCombobox = null;
       onCommit(value);
     }
@@ -587,9 +588,27 @@ const UI = (() => {
     function cancel() {
       settled = true;
       panel.remove();
+      document.removeEventListener('mousedown', onOutsideClick, true);
       openCombobox = null;
       onCommit(null);
     }
+
+    // Clicking anywhere outside the panel and outside the anchor cell (its
+    // input) commits the typed value, same as blur. This is the backstop
+    // for elements that preventDefault their own mousedown (e.g. the draft
+    // row's Priority/Topic cells, the quadrant picker's option buttons) —
+    // those never fire a native blur on this input, so without this listener
+    // the combobox would be stranded open (same idiom as the quadrant
+    // picker's onOutsideClick).
+    const onOutsideClick = e => {
+      if (panel.contains(e.target) || anchorTd.contains(e.target)) return;
+      finish(resolveValue(inp.value.trim()));
+    };
+    // Defer listener registration so the click that opened the combobox
+    // (which is still bubbling) doesn't immediately close it.
+    setTimeout(() => {
+      document.addEventListener('mousedown', onOutsideClick, true);
+    }, 0);
 
     inp.addEventListener('input', () => renderList());
     inp.addEventListener('keydown', e => {
@@ -623,7 +642,14 @@ const UI = (() => {
     inp.select();
 
     openCombobox = {
-      cleanup: () => { if (!settled) { settled = true; panel.remove(); } }
+      cleanup: () => {
+        if (!settled) {
+          settled = true;
+          panel.remove();
+          document.removeEventListener('mousedown', onOutsideClick, true);
+          if (restoreBadge) restoreBadge();
+        }
+      }
     };
   }
 
@@ -719,9 +745,12 @@ const UI = (() => {
           td.addEventListener('mousedown', e => e.preventDefault());
           td.addEventListener('click', () => {
             openTopicCombobox(td, draft.topic, value => {
-              if (value !== null) draft.topic = value;
+              if (value !== null) {
+                draft.topic = value;
+                refreshTopicDatalist();
+              }
               renderBadge();
-            });
+            }, renderBadge);
           });
           break;
         }
@@ -985,10 +1014,11 @@ const UI = (() => {
                 if (value !== null) {
                   TaskStore.update(task.uuid, 'topic', value);
                   FileManager.scheduleSave();
+                  refreshTopicDatalist();
                 }
                 const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
                 applyBadge(cur);
-              });
+              }, () => applyBadge(task));
             });
             break;
           }
