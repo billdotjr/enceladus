@@ -4,7 +4,7 @@ A private, client-side-only todo list app. No server, no accounts, no data ever 
 
 ## Features
 
-- **Eisenhower-quadrant prioritisation** — pick `base` / `important` / `urgent` / `urg&import` from a colour-coded 2×2 matrix popup
+- **Eisenhower-quadrant prioritisation** — pick `base` / `important` / `urgent` / `both` from a colour-coded 2×2 matrix popup
 - **Inline editing** — click any cell to edit; changes auto-save after 500 ms
 - **Description editor** — click the 📝 icon next to a task's Name to open a WYSIWYG editor (bold, links, line breaks); autosaves continuously as a draft while open, keeps the last 2 versions as a safety net
 - **Status workflow** — Today · Workable · In Progress · New · Pending feedback · Meeting scheduled · On-Hold · Closed, each colour-coded by urgency

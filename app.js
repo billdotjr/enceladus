@@ -20,16 +20,16 @@ const QUADRANT_STYLE = {
   'base':        { bg: '#16a34a', text: '#fff' }, // green
   'important':   { bg: '#2563eb', text: '#fff' }, // blue
   'urgent':      { bg: '#ea580c', text: '#fff' }, // orange
-  'urg&import':  { bg: '#dc2626', text: '#fff' }, // red
+  'both':        { bg: '#dc2626', text: '#fff' }, // red
 };
 
 // Grid order for the 2x2 picker: [top-left, top-right, bottom-left, bottom-right]
 // Important axis vertical (top=yes), Urgent axis horizontal (right=yes) —
-// urg&import is top-right, base is bottom-left.
-const QUADRANT_ORDER = ['important', 'urg&import', 'base', 'urgent'];
+// both is top-right, base is bottom-left.
+const QUADRANT_ORDER = ['important', 'both', 'base', 'urgent'];
 
 function quadrantLabel(t) {
-  if (t.important && t.urgent) return 'urg&import';
+  if (t.important && t.urgent) return 'both';
   if (t.important) return 'important';
   if (t.urgent)    return 'urgent';
   return 'base';
@@ -38,7 +38,7 @@ function quadrantLabel(t) {
 function quadrantRank(t) {
   // chmod-style bit encoding: important = 1, urgent = 2
   return (t.important ? 1 : 0) + (t.urgent ? 2 : 0);
-  // base=0, important=1, urgent=2, urg&import=3
+  // base=0, important=1, urgent=2, both=3
 }
 
 const COLUMNS = [
@@ -369,7 +369,7 @@ const SortController = (() => {
       if (sortKey === 'id') {
         av = Number(av) || 0; bv = Number(bv) || 0;
       }
-      // priority: rank by quadrant (base=0 ... urg&import=3), not the old numeric field
+      // priority: rank by quadrant (base=0 ... both=3), not the old numeric field
       if (sortKey === 'priority') {
         av = quadrantRank(a); bv = quadrantRank(b);
       }
@@ -979,8 +979,8 @@ const UI = (() => {
           td.addEventListener('mousedown', e => e.preventDefault());
           td.addEventListener('click', () => {
             openQuadrantPicker(td, q => {
-              draft.important = (q === 'important' || q === 'urg&import');
-              draft.urgent    = (q === 'urgent'    || q === 'urg&import');
+              draft.important = (q === 'important' || q === 'both');
+              draft.urgent    = (q === 'urgent'    || q === 'both');
               renderBadge();
             });
           });
@@ -1295,8 +1295,8 @@ const UI = (() => {
             applyBadge(task);
             td.addEventListener('click', () => {
               openQuadrantPicker(td, q => {
-                const important = (q === 'important' || q === 'urg&import');
-                const urgent    = (q === 'urgent'    || q === 'urg&import');
+                const important = (q === 'important' || q === 'both');
+                const urgent    = (q === 'urgent'    || q === 'both');
                 TaskStore.update(task.uuid, 'important', important);
                 TaskStore.update(task.uuid, 'urgent', urgent);
                 FileManager.scheduleSave();

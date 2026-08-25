@@ -94,7 +94,7 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | Key | Display | Type | Notes |
 |-----|---------|------|-------|
 | `id` | # | readonly | Auto-increment |
-| `priority` | Priority | quadrant | One of `base`/`important`/`urgent`/`urg&import`, picked via a 2×2 matrix popup (click the cell). Colour-coded badge. |
+| `priority` | Priority | quadrant | One of `base`/`important`/`urgent`/`both`, picked via a 2×2 matrix popup (click the cell). Colour-coded badge. |
 | `createdAt` | Created | date | Set to today on task creation |
 | `dueDate` | Due | date | Optional; faint placeholder when empty |
 | `topic` | Topic | topic | Single string; search-as-you-type combobox (click cell), create-on-the-fly, top-8-by-frequency suggestions, DJB2 hash colour |
@@ -130,11 +130,11 @@ one of four colour-coded badges:
 | `base`       | Green  |
 | `important`  | Blue   |
 | `urgent`     | Orange |
-| `urg&import` | Red    |
+| `both`       | Red    |
 
 Clicking the Priority cell opens a 2×2 matrix picker — Important axis
 vertical (top = yes), Urgent axis horizontal (right = yes); Important+Urgent
-(`urg&import`) is the top-right cell — to set both booleans at once.
+(`both`) is the top-right cell — to set both booleans at once.
 
 ## Description Editor
 

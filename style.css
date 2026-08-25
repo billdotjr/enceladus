@@ -149,10 +149,10 @@ table {
 
 /* ── Column widths ────────────────────────────────────────── */
 col.col-id             { width: 32px; }
-col.col-priority       { width: 80px; }
-col.col-createdAt      { width: 84px; }
-col.col-dueDate        { width: 84px; }
-col.col-nextActionDate { width: 84px; }
+col.col-priority       { width: 66px; }
+col.col-createdAt      { width: 72px; }
+col.col-dueDate        { width: 72px; }
+col.col-nextActionDate { width: 72px; }
 col.col-name           { width: 280px; }
 col.col-nextAction     { width: 350px; }
 col.col-contact        { width: 90px; }
