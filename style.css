@@ -142,7 +142,14 @@ main { padding: 12px; overflow: hidden; display: flex; flex-direction: column; g
 }
 
 table {
-  width: 100%;
+  /* Deliberately not 100%: with table-layout:fixed, a 100%-wide table
+     redistributes any leftover space (container wider than the sum of
+     column widths) proportionally across every column, including ones
+     meant to stay a fixed size. Sizing to "auto" instead makes the table
+     exactly as wide as its columns — no stretching, ever — and leaves
+     blank space on very wide screens rather than inflating columns.
+     .table-wrapper's overflow-x:auto keeps this safe on narrow screens. */
+  width: auto;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -150,14 +157,14 @@ table {
 /* ── Column widths ────────────────────────────────────────── */
 col.col-id             { width: 32px; }
 col.col-priority       { width: 66px; }
-col.col-createdAt      { width: 72px; }
-col.col-dueDate        { width: 72px; }
-col.col-nextActionDate { width: 72px; }
-col.col-name           { width: 280px; }
-col.col-nextAction     { width: auto; }  /* absorbs all leftover table width — the one flexible column */
-col.col-contact        { width: 90px; }
+col.col-createdAt      { width: 135px; }
+col.col-dueDate        { width: 135px; }
+col.col-nextActionDate { width: 135px; }
+col.col-name           { width: 310px; }
+col.col-nextAction     { width: 400px; }
+col.col-contact        { width: 115px; }
 col.col-topic           { width: 80px; }
-col.col-status         { width: 108px; }
+col.col-status         { width: 128px; }
 col.col-del            { width: 28px; }
 
 /* ── Header ───────────────────────────────────────────────── */
