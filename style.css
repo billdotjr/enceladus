@@ -154,7 +154,6 @@ col.col-createdAt      { width: 84px; }
 col.col-dueDate        { width: 84px; }
 col.col-nextActionDate { width: 84px; }
 col.col-name           { width: 280px; }
-col.col-description    { width: 320px; }
 col.col-nextAction     { width: 280px; }
 col.col-contact        { width: 90px; }
 col.col-topic           { width: 140px; }
@@ -277,7 +276,7 @@ td.cell-id {
 }
 
 /* ── Bold name ────────────────────────────────────────────── */
-td[data-key="name"] { font-weight: 700; }
+td[data-key="name"] .name-text { font-weight: 700; }
 
 /* ── Empty date placeholder ───────────────────────────────── */
 td input[type="date"].cell-input.date-empty {
@@ -340,7 +339,7 @@ td.draft-id {
   font-weight: 700;
 }
 /* Placeholder text for empty contenteditable cells in draft row */
-.draft-row td[contenteditable][data-placeholder]:empty::before {
+.draft-row [contenteditable][data-placeholder]:empty::before {
   content: attr(data-placeholder);
   color: var(--text-muted);
   font-style: italic;
@@ -358,6 +357,38 @@ td.cell-topic {
   cursor: pointer;
   border-radius: var(--radius);
 }
+
+/* ── Name cell + description icon ────────────────────────── */
+td.cell-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+td.cell-name .name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.name-desc-icon {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px;
+  opacity: 0.35;
+  border-radius: var(--radius);
+}
+.name-desc-icon.has-content { opacity: 1; }
+.name-desc-icon.has-draft {
+  opacity: 1;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.name-desc-icon:hover { opacity: 1; }
 
 /* ── Startup modal ────────────────────────────────────────── */
 .startup-modal {

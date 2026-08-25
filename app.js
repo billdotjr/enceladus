@@ -47,8 +47,7 @@ const COLUMNS = [
   { key: 'createdAt',      label: 'Created',        type: 'date',      sortable: true  },
   { key: 'dueDate',        label: 'Due',            type: 'date',      sortable: true  },
   { key: 'topic',          label: 'Topic',          type: 'topic',     sortable: true  },
-  { key: 'name',           label: 'Name',           type: 'text',      sortable: true  },
-  { key: 'description',    label: 'Description',    type: 'text',      sortable: false },
+  { key: 'name',           label: 'Name',           type: 'name',      sortable: true  },
   { key: 'nextActionDate', label: 'Next action',    type: 'date',      sortable: true  },
   { key: 'nextAction',     label: 'Next action',    type: 'text',      sortable: false },
   { key: 'contact',        label: 'Contact',        type: 'text',      sortable: true  },
@@ -760,6 +759,44 @@ const UI = (() => {
           break;
         }
 
+        case 'name': {
+          td.className = 'cell-name';
+          const span = document.createElement('span');
+          span.className = 'name-text';
+          span.contentEditable = 'true';
+          span.textContent = draft.name || '';
+          span.dataset.placeholder = 'Name…';
+          span.addEventListener('input', e => { draft.name = e.target.textContent; });
+          span.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitDraft(); }
+          });
+          td.appendChild(span);
+
+          const icon = document.createElement('button');
+          icon.type = 'button';
+          icon.className = 'name-desc-icon';
+          icon.textContent = '📝';
+          const applyIconState = () => {
+            icon.classList.remove('has-draft', 'has-content');
+            if (draft.descriptionDraft !== null) {
+              icon.classList.add('has-draft');
+              icon.title = 'Draft in progress — click to continue editing';
+            } else if (draft.description) {
+              icon.classList.add('has-content');
+              icon.title = 'Description';
+            } else {
+              icon.title = 'No description';
+            }
+          };
+          applyIconState();
+          // Prevent blur so a later click (Task 4 wires this up) won't
+          // commit the draft row prematurely (same idiom as the quadrant
+          // picker and topic combobox above).
+          icon.addEventListener('mousedown', e => e.preventDefault());
+          td.appendChild(icon);
+          break;
+        }
+
         case 'status': {
           td.className = 'cell-status';
           const applyDraftStatus = s => {
@@ -807,7 +844,7 @@ const UI = (() => {
   }
 
   function focusDraftName() {
-    const cell = document.querySelector('.draft-row td[data-placeholder="Name…"]');
+    const cell = document.querySelector('.draft-row .name-text[data-placeholder="Name…"]');
     if (cell) cell.focus();
   }
 
@@ -1025,6 +1062,42 @@ const UI = (() => {
                 applyBadge(cur);
               }, () => applyBadge(task));
             });
+            break;
+          }
+
+          case 'name': {
+            td.className = 'cell-name';
+            const span = document.createElement('span');
+            span.className = 'name-text';
+            span.contentEditable = 'true';
+            span.textContent = task.name || '';
+            span.addEventListener('blur', e => {
+              TaskStore.update(task.uuid, 'name', e.target.textContent.trim());
+              FileManager.scheduleSave();
+            });
+            span.addEventListener('keydown', e => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); span.blur(); }
+            });
+            td.appendChild(span);
+
+            const icon = document.createElement('button');
+            icon.type = 'button';
+            icon.className = 'name-desc-icon';
+            icon.textContent = '📝';
+            const applyIconState = t => {
+              icon.classList.remove('has-draft', 'has-content');
+              if (t.descriptionDraft !== null) {
+                icon.classList.add('has-draft');
+                icon.title = 'Draft in progress — click to continue editing';
+              } else if (t.description) {
+                icon.classList.add('has-content');
+                icon.title = 'Description';
+              } else {
+                icon.title = 'No description';
+              }
+            };
+            applyIconState(task);
+            td.appendChild(icon);
             break;
           }
 
