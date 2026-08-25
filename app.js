@@ -438,6 +438,70 @@ function labelColor(text) {
   return `hsl(${Math.abs(h) % 360}, 58%, 38%)`;
 }
 
+// ── Description markdown ⇄ DOM (bold, links, line breaks only) ─────────────
+// Never uses innerHTML — all DOM built via createElement/textContent, so
+// user-authored description text can never be interpreted as markup.
+
+function parseDescriptionToDOM(markdown, container) {
+  container.textContent = '';
+  const lines = markdown.length ? markdown.split('\n') : [''];
+  const tokenRe = /\*\*(.+?)\*\*|\[(.+?)\]\((.+?)\)/g;
+  for (const line of lines) {
+    const div = document.createElement('div');
+    let lastIndex = 0;
+    let match;
+    tokenRe.lastIndex = 0;
+    while ((match = tokenRe.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        div.appendChild(document.createTextNode(line.slice(lastIndex, match.index)));
+      }
+      if (match[1] !== undefined) {
+        // bold: **text**
+        const strong = document.createElement('strong');
+        strong.textContent = match[1];
+        div.appendChild(strong);
+      } else {
+        // link: [text](url)
+        const text = match[2];
+        const url = match[3];
+        if (/^(https?:\/\/|mailto:)/i.test(url)) {
+          const a = document.createElement('a');
+          a.textContent = text;
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noreferrer';
+          div.appendChild(a);
+        } else {
+          // Unsafe/unrecognized scheme: render the literal source text,
+          // never turn it into a clickable/executable link.
+          div.appendChild(document.createTextNode(match[0]));
+        }
+      }
+      lastIndex = tokenRe.lastIndex;
+    }
+    if (lastIndex < line.length) {
+      div.appendChild(document.createTextNode(line.slice(lastIndex)));
+    }
+    container.appendChild(div);
+  }
+}
+
+function serializeDOMToDescription(container) {
+  function serializeNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const inner = [...node.childNodes].map(serializeNode).join('');
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'b' || tag === 'strong') return `**${inner}**`;
+    if (tag === 'a') return `[${inner}](${node.getAttribute('href') || ''})`;
+    if (tag === 'br') return '';
+    return inner; // unexpected wrapper (e.g. execCommand quirks) — just recurse
+  }
+  return [...container.children].map(div =>
+    [...div.childNodes].map(serializeNode).join('')
+  ).join('\n');
+}
+
 // ── UI ──────────────────────────────────────────────────────────────────────
 
 const UI = (() => {
