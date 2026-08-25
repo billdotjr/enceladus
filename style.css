@@ -154,7 +154,7 @@ col.col-createdAt      { width: 72px; }
 col.col-dueDate        { width: 72px; }
 col.col-nextActionDate { width: 72px; }
 col.col-name           { width: 280px; }
-col.col-nextAction     { width: 350px; }
+col.col-nextAction     { width: auto; }  /* absorbs all leftover table width — the one flexible column */
 col.col-contact        { width: 90px; }
 col.col-topic           { width: 80px; }
 col.col-status         { width: 108px; }
@@ -354,9 +354,11 @@ td.draft-id {
 /* ── Topic badge ──────────────────────────────────────────── */
 td.cell-topic {
   font-weight: 600;
+  text-align: right;
   cursor: pointer;
   border-radius: var(--radius);
 }
+td.cell-topic input.cell-input { text-align: right; }
 
 /* ── Name cell + description icon ────────────────────────── */
 td.cell-name {
