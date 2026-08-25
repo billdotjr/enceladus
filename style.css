@@ -148,23 +148,16 @@ table {
 }
 
 /* ── Column widths ────────────────────────────────────────── */
-col.col-id             { width: 32px; }
-col.col-impact         { width: 44px; }
-col.col-urgency        { width: 44px; }
-col.col-priority       { width: 48px; }
-col.col-createdAt      { width: 84px; }
-col.col-dueDate        { width: 84px; }
-col.col-nextActionDate { width: 84px; }
-col.col-name           { width: 280px; }
-col.col-description    { width: 320px; }
-col.col-nextAction     { width: 280px; }
-col.col-contact        { width: 90px; }
-col.col-labels         { width: 140px; }
-col.col-status         { width: 108px; }
-col.col-del            { width: 28px; }
+/* Every <col> gets its width set via JS as a percentage (app.js:
+   applyColumnWidths/DEFAULT_COLUMN_WIDTHS) — user-resizable by dragging a
+   header's right edge, persisted to localStorage. All percentages always
+   sum to exactly 100%, so table-layout:fixed never has a leftover/shortfall
+   to redistribute, and proportions hold automatically across any viewport
+   size with no JS recalculation on resize. No widths are set here in CSS. */
 
 /* ── Header ───────────────────────────────────────────────── */
 thead tr th {
+  position: relative;
   background: var(--bg-header);
   color: var(--text);
   font-size: 12px;
@@ -181,6 +174,20 @@ thead tr:first-child th:hover { background: var(--bg-row-hover); }
 thead tr:first-child th.sorted-asc::after  { content: ' ▲'; font-size: 10px; opacity: 0.7; }
 thead tr:first-child th.sorted-desc::after { content: ' ▼'; font-size: 10px; opacity: 0.7; }
 th.th-del { cursor: default !important; text-align: center; padding: 0; }
+
+/* ── Column resize handle ─────────────────────────────────── */
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.col-resize-handle:hover { background: var(--accent); opacity: 0.5; }
+body.col-resizing { cursor: col-resize; user-select: none; }
+body.col-resizing .col-resize-handle { background: var(--accent); opacity: 0.6; }
 
 /* ── Filter row ───────────────────────────────────────────── */
 #filter-row th {
@@ -255,21 +262,14 @@ td input[type="date"].cell-input {
   color-scheme: inherit;
 }
 
-/* ── Impact / Urgency / Priority heatmap cells ────────────── */
-td.cell-impact,
-td.cell-urgency,
-td.cell-priority {
+/* ── Quadrant badge ───────────────────────────────────────── */
+td.cell-quadrant {
   font-weight: 700;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   padding: 2px 4px;
-}
-td.cell-impact select.cell-select,
-td.cell-urgency select.cell-select {
-  text-align: center;
-  font-weight: 700;
-  font-size: 12px;
   cursor: pointer;
+  border-radius: var(--radius);
 }
 
 /* ── Status badge ─────────────────────────────────────────── */
@@ -286,7 +286,7 @@ td.cell-id {
 }
 
 /* ── Bold name ────────────────────────────────────────────── */
-td[data-key="name"] { font-weight: 700; }
+td[data-key="name"] .name-text { font-weight: 700; }
 
 /* ── Empty date placeholder ───────────────────────────────── */
 td input[type="date"].cell-input.date-empty {
@@ -349,7 +349,7 @@ td.draft-id {
   font-weight: 700;
 }
 /* Placeholder text for empty contenteditable cells in draft row */
-.draft-row td[contenteditable][data-placeholder]:empty::before {
+.draft-row [contenteditable][data-placeholder]:empty::before {
   content: attr(data-placeholder);
   color: var(--text-muted);
   font-style: italic;
@@ -361,60 +361,46 @@ td.draft-id {
 }
 .btn-draft-commit:hover { color: var(--accent-hover); }
 
-/* ── Label chips ──────────────────────────────────────────── */
-td.cell-labels { padding: 3px 4px; overflow: visible; white-space: normal; }
+/* ── Topic badge ──────────────────────────────────────────── */
+td.cell-topic {
+  font-weight: 600;
+  text-align: right;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+td.cell-topic input.cell-input { text-align: right; }
 
-.label-cell {
+/* ── Name cell + description icon ────────────────────────── */
+td.cell-name {
   display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
   align-items: center;
-  min-height: 22px;
+  justify-content: space-between;
+  gap: 4px;
 }
-
-.label-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 5px 1px 7px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #fff;
-  white-space: nowrap;
-  line-height: 1.6;
+td.cell-name .name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-.label-chip.dragging  { opacity: 0.35; cursor: grabbing; }
-.label-chip.drag-over { outline: 2px solid rgba(255,255,255,0.8); outline-offset: 1px; }
-.label-chip[draggable="true"] { cursor: grab; }
-
-.label-chip-x {
+.name-desc-icon {
+  flex-shrink: 0;
   background: none;
   border: none;
-  color: rgba(255,255,255,0.75);
   cursor: pointer;
   font-size: 13px;
   line-height: 1;
-  padding: 0 1px;
+  padding: 2px;
+  opacity: 0.35;
+  border-radius: var(--radius);
+}
+.name-desc-icon.has-content { opacity: 1; }
+.name-desc-icon.has-draft {
+  opacity: 1;
+  background: var(--accent);
   border-radius: 50%;
-  display: flex;
-  align-items: center;
 }
-.label-chip-x:hover { color: #fff; }
-
-.label-input {
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  font-family: var(--font);
-  outline: none;
-  width: 36px;
-  min-width: 36px;
-  padding: 1px 2px;
-}
-.label-input:focus { width: 80px; border-bottom: 1px solid var(--accent); }
+.name-desc-icon:hover { opacity: 1; }
 
 /* ── Startup modal ────────────────────────────────────────── */
 .startup-modal {
@@ -481,6 +467,201 @@ td.cell-labels { padding: 3px 4px; overflow: visible; white-space: normal; }
 }
 .api-warn.hidden { display: none; }
 
+
+/* ── Quadrant picker ──────────────────────────────────────── */
+.quadrant-picker {
+  position: absolute;
+  z-index: 1000;
+  display: grid;
+  grid-template-columns: repeat(2, 72px);
+  grid-template-rows: repeat(2, 40px);
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.quadrant-picker .qp-cell {
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2px;
+  font-family: var(--font);
+}
+.quadrant-picker .qp-cell:hover { filter: brightness(1.1); }
+
+/* ── Topic combobox ───────────────────────────────────────── */
+.topic-combobox {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-family: var(--font);
+}
+.topic-combobox .tc-row {
+  padding: 4px 8px;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.topic-combobox .tc-row:hover,
+.topic-combobox .tc-row.tc-row-highlighted {
+  filter: brightness(1.1);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.topic-combobox .tc-row-create {
+  background: var(--bg-filter);
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* ── Description editor ───────────────────────────────────── */
+.desc-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.55);
+}
+.desc-editor {
+  display: flex;
+  flex-direction: column;
+  width: 33vw;
+  height: 33vh;
+  min-width: 320px;
+  min-height: 240px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.25);
+  overflow: hidden;
+}
+.desc-editor.fullscreen {
+  width: 92vw;
+  height: 92vh;
+}
+.desc-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+}
+.desc-editor-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13px;
+}
+.desc-editor-toolbar {
+  position: relative;
+  display: flex;
+  gap: 4px;
+}
+.desc-editor-toolbar button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 7px;
+}
+.desc-editor-toolbar button:hover { background: var(--bg-row-hover); }
+.desc-editor-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+}
+.desc-editor-close:hover { color: var(--del); }
+.desc-editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+  outline: none;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.desc-editor-body div { min-height: 1.1em; }
+
+/* ── Description history popover ─────────────────────────── */
+.desc-history-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  min-width: 200px;
+  max-width: 320px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.desc-history-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px;
+}
+.desc-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.desc-history-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.desc-history-row button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+}
 
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 768px) {

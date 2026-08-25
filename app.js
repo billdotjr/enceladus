@@ -16,24 +16,43 @@ const STATUS_STYLE = {
   'Closed':             { bg: '#4b5563', text: '#d1d5db' }, // dark grey
 };
 
+const QUADRANT_STYLE = {
+  'base':        { bg: '#16a34a', text: '#fff' }, // green
+  'important':   { bg: '#2563eb', text: '#fff' }, // blue
+  'urgent':      { bg: '#ea580c', text: '#fff' }, // orange
+  'both':        { bg: '#dc2626', text: '#fff' }, // red
+};
+
+// Grid order for the 2x2 picker: [top-left, top-right, bottom-left, bottom-right]
+// Important axis vertical (top=yes), Urgent axis horizontal (right=yes) —
+// both is top-right, base is bottom-left.
+const QUADRANT_ORDER = ['important', 'both', 'base', 'urgent'];
+
+function quadrantLabel(t) {
+  if (t.important && t.urgent) return 'both';
+  if (t.important) return 'important';
+  if (t.urgent)    return 'urgent';
+  return 'base';
+}
+
+function quadrantRank(t) {
+  // chmod-style bit encoding: important = 1, urgent = 2
+  return (t.important ? 1 : 0) + (t.urgent ? 2 : 0);
+  // base=0, important=1, urgent=2, both=3
+}
+
 const COLUMNS = [
   { key: 'id',             label: '#',              type: 'readonly',  sortable: true  },
-  { key: 'impact',         label: 'Impact',         type: 'impact',    sortable: true  },
-  { key: 'urgency',        label: 'Urgency',        type: 'urgency',   sortable: true  },
-  { key: 'priority',       label: 'Priority',       type: 'priority',  sortable: true  },
+  { key: 'priority',       label: 'Priority',       type: 'quadrant',  sortable: true  },
   { key: 'createdAt',      label: 'Created',        type: 'date',      sortable: true  },
   { key: 'dueDate',        label: 'Due',            type: 'date',      sortable: true  },
-  { key: 'name',           label: 'Name',           type: 'text',      sortable: true  },
-  { key: 'description',    label: 'Description',    type: 'text',      sortable: false },
+  { key: 'topic',          label: 'Topic',          type: 'topic',     sortable: true  },
+  { key: 'name',           label: 'Name',           type: 'name',      sortable: true  },
   { key: 'nextActionDate', label: 'Next action',    type: 'date',      sortable: true  },
   { key: 'nextAction',     label: 'Next action',    type: 'text',      sortable: false },
   { key: 'contact',        label: 'Contact',        type: 'text',      sortable: true  },
-  { key: 'labels',         label: 'Label',          type: 'labels',    sortable: true  },
   { key: 'status',         label: 'Status',         type: 'status',    sortable: true  },
 ];
-
-const IMPACT_VALUES = [1, 2, 4, 8, 16, 32, 64, 128];
-const MAX_PRIORITY  = 128 * 10; // 1280
 
 // Pre-built option HTML with per-status colors (used in every status select)
 function statusOptionsHTML(selected) {
@@ -53,17 +72,18 @@ const TaskStore = (() => {
     return {
       uuid: crypto.randomUUID(),
       id: nextId++,
-      impact: 1,
-      urgency: 5,
-      priority: 5,
+      important: false,
+      urgent: false,
       createdAt: new Date().toISOString().slice(0, 10),
       dueDate: '',
       nextActionDate: '',
       name: '',
       description: '',
+      descriptionHistory: [],
+      descriptionDraft: null,
       nextAction: '',
       contact: '',
-      labels: [],
+      topic: '',
       status: 'New',
     };
   }
@@ -76,15 +96,37 @@ const TaskStore = (() => {
         task.labels = task.tag ? [task.tag] : [];
         delete task.tag;
       }
+      // Migrate old multi-value labels array to a single topic string.
+      // 'private' anywhere in the old labels wins (keeps private-section
+      // membership); otherwise take the first label; no labels -> ''.
+      if (typeof task.topic !== 'string') {
+        const privateLabel = task.labels.find(l => l.toLowerCase() === 'private');
+        task.topic = privateLabel ? 'Private' : (task.labels[0] || '');
+      }
+      delete task.labels;
+      // Migrate: default the description-versioning fields if absent or malformed
+      // (purely additive; also guards against hand-edited/corrupt files crashing
+      // the editor on open).
+      if (typeof task.description !== 'string') task.description = '';
+      if (!Array.isArray(task.descriptionHistory)) task.descriptionHistory = [];
+      if (typeof task.descriptionDraft !== 'string' && task.descriptionDraft !== null) task.descriptionDraft = null;
       // Migrate old "Done" status to "Closed"
       if (task.status === 'Done') task.status = 'Closed';
       // Migrate missing createdAt; truncate old ISO datetime to date
       if (!task.createdAt) task.createdAt = '';
       else if (task.createdAt.length > 10) task.createdAt = task.createdAt.slice(0, 10);
-      // Migrate to impact/urgency model
-      if (task.impact === undefined) task.impact = 1;
-      if (task.urgency === undefined) task.urgency = 5;
-      task.priority = task.impact * task.urgency;
+      // Migrate impact/urgency numeric model to important/urgent booleans.
+      // Defaults for the old model were impact=1, urgency=5 — anything
+      // moved away from the default is treated as "on" for that axis.
+      if (task.important === undefined || task.urgent === undefined) {
+        const oldImpact  = task.impact  !== undefined ? task.impact  : 1;
+        const oldUrgency = task.urgency !== undefined ? task.urgency : 5;
+        task.important = oldImpact  !== 1;
+        task.urgent    = oldUrgency !== 5;
+      }
+      delete task.impact;
+      delete task.urgency;
+      delete task.priority;
       return task;
     });
     nextId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
@@ -107,13 +149,19 @@ const TaskStore = (() => {
 
   function getAll()  { return tasks; }
 
-  function allLabels() {
-    return [...new Set(tasks.flatMap(t => t.labels || []).filter(Boolean))].sort();
+  function topicCounts() {
+    const counts = new Map();
+    for (const t of tasks) {
+      if (t.topic) counts.set(t.topic, (counts.get(t.topic) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([topic, count]) => ({ topic, count }))
+      .sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic));
   }
 
   function toJSON() { return JSON.stringify(tasks, null, 2); }
 
-  return { load, add, remove, update, getAll, allLabels, toJSON };
+  return { load, add, remove, update, getAll, topicCounts, toJSON };
 })();
 
 // ── IDB handle store ────────────────────────────────────────────────────────
@@ -318,13 +366,12 @@ const SortController = (() => {
     return [...tasks].sort((a, b) => {
       let av = a[sortKey], bv = b[sortKey];
       // numeric
-      if (sortKey === 'id' || sortKey === 'priority') {
+      if (sortKey === 'id') {
         av = Number(av) || 0; bv = Number(bv) || 0;
       }
-      // labels: sort by first label as ordered in the cell; no labels sorts last
-      if (sortKey === 'labels') {
-        av = Array.isArray(av) && av.length ? av[0].toLowerCase() : '￿';
-        bv = Array.isArray(bv) && bv.length ? bv[0].toLowerCase() : '￿';
+      // priority: rank by quadrant (base=0 ... both=3), not the old numeric field
+      if (sortKey === 'priority') {
+        av = quadrantRank(a); bv = quadrantRank(b);
       }
       // date strings sort lexicographically correctly (ISO format);
       // empty dates always sort last regardless of direction
@@ -357,6 +404,7 @@ const FilterController = (() => {
     return tasks.filter(task =>
       Object.entries(filters).every(([k, v]) => {
         if (!v) return true;
+        if (k === 'priority') return quadrantLabel(task) === v;
         const cell = String(task[k] ?? '').toLowerCase();
         if (v.startsWith('!')) return cell !== v.slice(1);
         return cell.includes(v);
@@ -371,36 +419,6 @@ const FilterController = (() => {
   return { set, apply, get, clear };
 })();
 
-// ── Heatmap colours ─────────────────────────────────────────────────────────
-// t in [0,1]: 0 = green, 0.5 = amber, 1 = red
-
-function heatColor(t) {
-  t = Math.min(1, Math.max(0, t));
-  let r, g, b;
-  if (t <= 0.5) {
-    const s = t / 0.5;
-    r = Math.round(76  + s * (255 - 76));
-    g = Math.round(175 + s * (152 - 175));
-    b = Math.round(80  + s * (0   - 80));
-  } else {
-    const s = (t - 0.5) / 0.5;
-    r = Math.round(255 + s * (244 - 255));
-    g = Math.round(152 + s * (67  - 152));
-    b = Math.round(0   + s * (54  - 0));
-  }
-  return [r, g, b];
-}
-
-function heatRgb(t)  { const [r,g,b] = heatColor(t); return `rgb(${r},${g},${b})`; }
-function heatPale(t) {
-  const [r,g,b] = heatColor(t);
-  return `rgb(${Math.round(r*0.4+255*0.6)},${Math.round(g*0.4+255*0.6)},${Math.round(b*0.4+255*0.6)})`;
-}
-
-function impactColor(val)   { return heatPale(Math.log2(Math.max(1, val)) / 7); }
-function urgencyColor(val)  { return heatPale((Math.max(1, Math.min(10, val)) - 1) / 9); }
-function priorityColor(val) { return heatRgb((val - 1) / (MAX_PRIORITY - 1)); }
-
 // Returns {bg, text} for date urgency (both due and next-action), else null.
 function dateUrgencyColor(dateStr) {
   if (!dateStr) return null;
@@ -414,25 +432,505 @@ function dateUrgencyColor(dateStr) {
 
 // ── Label colour (DJB2 hash → HSL) ─────────────────────────────────────────
 
-function labelColor(text) {
+function djb2Hue(text) {
   let h = 5381;
   for (let i = 0; i < text.length; i++) {
     h = ((h << 5) + h) ^ text.charCodeAt(i);
     h |= 0;
   }
-  return `hsl(${Math.abs(h) % 360}, 58%, 38%)`;
+  return Math.abs(h) % 360;
+}
+
+function labelColor(text) { return `hsl(${djb2Hue(text)}, 58%, 38%)`; }
+// Lighter variant for use as text colour (not a filled background) — legible
+// against both the light and dark theme's default background.
+function labelTextColor(text) { return `hsl(${djb2Hue(text)}, 60%, 48%)`; }
+
+// ── Description markdown ⇄ DOM (bold, links, line breaks only) ─────────────
+// Never uses innerHTML — all DOM built via createElement/textContent, so
+// user-authored description text can never be interpreted as markup.
+
+function parseDescriptionToDOM(markdown, container) {
+  container.textContent = '';
+  const lines = markdown.length ? markdown.split('\n') : [''];
+  const tokenRe = /\*\*(.+?)\*\*|\[(.+?)\]\((.+?)\)/g;
+  for (const line of lines) {
+    const div = document.createElement('div');
+    let lastIndex = 0;
+    let match;
+    tokenRe.lastIndex = 0;
+    while ((match = tokenRe.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        div.appendChild(document.createTextNode(line.slice(lastIndex, match.index)));
+      }
+      if (match[1] !== undefined) {
+        // bold: **text**
+        const strong = document.createElement('strong');
+        strong.textContent = match[1];
+        div.appendChild(strong);
+      } else {
+        // link: [text](url)
+        const text = match[2];
+        const url = match[3];
+        if (/^(https?:\/\/|mailto:)/i.test(url)) {
+          const a = document.createElement('a');
+          a.textContent = text;
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noreferrer';
+          div.appendChild(a);
+        } else {
+          // Unsafe/unrecognized scheme: render the literal source text,
+          // never turn it into a clickable/executable link.
+          div.appendChild(document.createTextNode(match[0]));
+        }
+      }
+      lastIndex = tokenRe.lastIndex;
+    }
+    if (lastIndex < line.length) {
+      div.appendChild(document.createTextNode(line.slice(lastIndex)));
+    }
+    container.appendChild(div);
+  }
+}
+
+function serializeDOMToDescription(container) {
+  function serializeNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const inner = [...node.childNodes].map(serializeNode).join('');
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'b' || tag === 'strong') return `**${inner}**`;
+    if (tag === 'a') return `[${inner}](${node.getAttribute('href') || ''})`;
+    if (tag === 'br') return node.parentNode.childNodes.length === 1 ? '' : '\n';
+    return inner; // unexpected wrapper (e.g. execCommand quirks) — just recurse
+  }
+  // Walk ALL child nodes (not just element children): Chrome removes the
+  // div-per-line wrapper structure the moment the editor is emptied and
+  // fresh content is typed, so bare text/inline nodes can land directly on
+  // the container. Treat DIV/P as explicit line boundaries and accumulate
+  // any other node into an implicit "pending" line so nothing is dropped.
+  const lines = [];
+  let pending = null;
+  const flush = () => { if (pending !== null) { lines.push(pending); pending = null; } };
+  for (const node of container.childNodes) {
+    if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === 'DIV' || node.tagName === 'P')) {
+      flush();
+      lines.push([...node.childNodes].map(serializeNode).join(''));
+    } else {
+      pending = (pending || '') + serializeNode(node);
+    }
+  }
+  flush();
+  return lines.join('\n');
 }
 
 // ── UI ──────────────────────────────────────────────────────────────────────
 
 const UI = (() => {
   // ── Draft row (new task input) ────────────────────────────────────────────
-  const DRAFT_DEFAULTS = () => ({ impact: 1, urgency: 5, priority: 5, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', labels: [], status: 'New' });
+  const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', descriptionHistory: [], descriptionDraft: null, nextAction: '', contact: '', topic: '', status: 'New' });
   let draft = DRAFT_DEFAULTS();
+
+  // ── Quadrant picker (shared by draft row + existing rows) ────────────────
+  let openPicker = null;
+
+  function closeQuadrantPicker() {
+    if (openPicker) {
+      openPicker.panel.remove();
+      document.removeEventListener('mousedown', openPicker.onOutsideClick, true);
+      document.removeEventListener('keydown', openPicker.onKeydown, true);
+      openPicker = null;
+    }
+  }
+
+  function openQuadrantPicker(anchorTd, onSelect) {
+    closeQuadrantPicker();
+
+    const panel = document.createElement('div');
+    panel.className = 'quadrant-picker';
+    QUADRANT_ORDER.forEach(q => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'qp-cell';
+      btn.textContent = q;
+      const st = QUADRANT_STYLE[q];
+      btn.style.background = st.bg;
+      btn.style.color = st.text;
+      // Prevent blur so clicking a quadrant doesn't shift focus away from
+      // the draft row and trigger a premature commit.
+      btn.addEventListener('mousedown', e => e.preventDefault());
+      btn.addEventListener('click', () => {
+        onSelect(q);
+        closeQuadrantPicker();
+      });
+      panel.appendChild(btn);
+    });
+    document.body.appendChild(panel);
+
+    const rect = anchorTd.getBoundingClientRect();
+    panel.style.left = `${rect.left + window.scrollX}px`;
+    panel.style.top  = `${rect.bottom + window.scrollY + 2}px`;
+
+    const onOutsideClick = e => { if (!panel.contains(e.target)) closeQuadrantPicker(); };
+    const onKeydown = e => { if (e.key === 'Escape') closeQuadrantPicker(); };
+    // Defer listener registration so the click that opened the picker
+    // (which is still bubbling) doesn't immediately close it.
+    setTimeout(() => {
+      document.addEventListener('mousedown', onOutsideClick, true);
+      document.addEventListener('keydown', onKeydown, true);
+    }, 0);
+
+    openPicker = { panel, onOutsideClick, onKeydown };
+  }
+
+  // ── Topic combobox (shared by draft row + existing rows) ─────────────────
+  let openCombobox = null;
+
+  function closeTopicCombobox() {
+    if (openCombobox) {
+      openCombobox.cleanup();
+      openCombobox = null;
+    }
+  }
+
+  function openTopicCombobox(anchorTd, currentValue, onCommit, restoreBadge) {
+    closeTopicCombobox();
+
+    let settled = false;
+
+    anchorTd.textContent = '';
+    anchorTd.style.background = '';
+    anchorTd.style.color = '';
+
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'cell-input';
+    inp.value = currentValue || '';
+    anchorTd.appendChild(inp);
+
+    const panel = document.createElement('div');
+    panel.className = 'topic-combobox';
+    document.body.appendChild(panel);
+
+    let items = []; // [{ create: bool, value: string }]
+    let highlighted = -1;
+
+    function resolveValue(raw) {
+      // Case-insensitive snap to an existing topic's canonical casing, so
+      // typing "work" when "Work" already exists doesn't create a duplicate.
+      const match = TaskStore.topicCounts().find(c => c.topic.toLowerCase() === raw.toLowerCase());
+      return match ? match.topic : raw;
+    }
+
+    function positionPanel() {
+      const rect = anchorTd.getBoundingClientRect();
+      panel.style.left = `${rect.left + window.scrollX}px`;
+      panel.style.top = `${rect.bottom + window.scrollY + 2}px`;
+      panel.style.minWidth = `${rect.width}px`;
+    }
+
+    function renderList(forceTop8) {
+      const query = forceTop8 ? '' : inp.value.trim();
+      const lower = query.toLowerCase();
+      const counts = TaskStore.topicCounts();
+      const matches = lower
+        ? counts.filter(c => c.topic.toLowerCase().includes(lower))
+        : counts.slice(0, 8);
+      items = matches.map(c => ({ create: false, value: c.topic }));
+      const exactMatch = counts.some(c => c.topic.toLowerCase() === lower);
+      if (query && !exactMatch) items.push({ create: true, value: query });
+
+      highlighted = -1;
+      panel.innerHTML = '';
+      items.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'tc-row' + (item.create ? ' tc-row-create' : '');
+        if (item.create) {
+          row.textContent = `Create "${item.value}"`;
+        } else {
+          row.textContent = item.value;
+          row.style.background = labelColor(item.value);
+          row.style.color = '#fff';
+        }
+        row.addEventListener('mousedown', e => {
+          e.preventDefault(); // keep the input focused; commit directly here
+          finish(item.value);
+        });
+        panel.appendChild(row);
+      });
+      positionPanel();
+    }
+
+    function updateHighlight() {
+      [...panel.children].forEach((row, i) => {
+        row.classList.toggle('tc-row-highlighted', i === highlighted);
+      });
+    }
+
+    function finish(value) {
+      settled = true;
+      panel.remove();
+      document.removeEventListener('mousedown', onOutsideClick, true);
+      openCombobox = null;
+      onCommit(value);
+    }
+
+    function cancel() {
+      settled = true;
+      panel.remove();
+      document.removeEventListener('mousedown', onOutsideClick, true);
+      openCombobox = null;
+      onCommit(null);
+    }
+
+    // Clicking anywhere outside the panel and outside the anchor cell (its
+    // input) commits the typed value, same as blur. This is the backstop
+    // for elements that preventDefault their own mousedown (e.g. the draft
+    // row's Priority/Topic cells, the quadrant picker's option buttons) —
+    // those never fire a native blur on this input, so without this listener
+    // the combobox would be stranded open (same idiom as the quadrant
+    // picker's onOutsideClick).
+    const onOutsideClick = e => {
+      if (panel.contains(e.target) || anchorTd.contains(e.target)) return;
+      finish(resolveValue(inp.value.trim()));
+    };
+    // Defer listener registration so the click that opened the combobox
+    // (which is still bubbling) doesn't immediately close it.
+    setTimeout(() => {
+      document.addEventListener('mousedown', onOutsideClick, true);
+    }, 0);
+
+    inp.addEventListener('input', () => renderList());
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (items.length) { highlighted = Math.min(highlighted + 1, items.length - 1); updateHighlight(); }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (items.length) { highlighted = Math.max(highlighted - 1, 0); updateHighlight(); }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlighted >= 0 && items[highlighted]) {
+          finish(items[highlighted].value);
+        } else {
+          const val = inp.value.trim();
+          if (val) finish(resolveValue(val));
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancel();
+      }
+    });
+    inp.addEventListener('blur', () => {
+      if (settled) return; // already handled by a row mousedown or Escape
+      const val = inp.value.trim();
+      finish(resolveValue(val));
+    });
+
+    renderList(true);
+    inp.focus();
+    inp.select();
+
+    openCombobox = {
+      cleanup: () => {
+        if (!settled) {
+          settled = true;
+          panel.remove();
+          document.removeEventListener('mousedown', onOutsideClick, true);
+          if (restoreBadge) restoreBadge();
+        }
+      }
+    };
+  }
+
+  // ── Description editor (shared by draft row + existing rows) ─────────────
+  let openDescEditor = null;
+
+  function closeDescriptionEditor() {
+    if (openDescEditor) {
+      openDescEditor.cleanup();
+      openDescEditor = null;
+    }
+  }
+
+  function openDescriptionEditor({ taskName, getState, setDraft, finalize }) {
+    closeDescriptionEditor();
+
+    const state = getState();
+    const startingContent = state.draft !== null ? state.draft : state.description;
+    if (state.draft === null) {
+      // Starting a fresh session: mark a draft as "in progress" immediately,
+      // even before any keystroke — crash-safety from the first moment, and
+      // the icon reflects "draft in progress" right away.
+      setDraft(startingContent);
+    }
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'desc-editor-backdrop';
+
+    const modal = document.createElement('div');
+    modal.className = 'desc-editor';
+
+    const header = document.createElement('div');
+    header.className = 'desc-editor-header';
+    const titleEl = document.createElement('span');
+    titleEl.className = 'desc-editor-title';
+    titleEl.textContent = taskName || '(untitled task)';
+    header.appendChild(titleEl);
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'desc-editor-toolbar';
+    header.appendChild(toolbar);
+
+    const btnBold = document.createElement('button');
+    btnBold.type = 'button';
+    btnBold.textContent = 'B';
+    btnBold.style.fontWeight = '700';
+    btnBold.title = 'Bold (selection)';
+    // Prevent blur so clicking Bold doesn't collapse the text selection in
+    // `body` before execCommand runs.
+    btnBold.addEventListener('mousedown', e => e.preventDefault());
+    btnBold.addEventListener('click', () => {
+      body.focus();
+      document.execCommand('bold', false, null);
+      scheduleAutosave();
+    });
+    toolbar.appendChild(btnBold);
+
+    const btnLink = document.createElement('button');
+    btnLink.type = 'button';
+    btnLink.textContent = '🔗';
+    btnLink.title = 'Link (selection)';
+    btnLink.addEventListener('mousedown', e => e.preventDefault());
+    btnLink.addEventListener('click', () => {
+      const url = window.prompt('Link URL:');
+      if (!url) return;
+      if (!/^(https?:\/\/|mailto:)/i.test(url)) {
+        window.alert('Only http://, https://, or mailto: links are allowed.');
+        return;
+      }
+      body.focus();
+      document.execCommand('createLink', false, url);
+      scheduleAutosave();
+    });
+    toolbar.appendChild(btnLink);
+
+    const btnHistory = document.createElement('button');
+    btnHistory.type = 'button';
+    btnHistory.textContent = '🕐';
+    btnHistory.title = 'Version history';
+    let historyPopover = null;
+    function closeHistoryPopover() {
+      if (historyPopover) { historyPopover.remove(); historyPopover = null; }
+    }
+    btnHistory.addEventListener('mousedown', e => e.preventDefault());
+    btnHistory.addEventListener('click', () => {
+      if (historyPopover) { closeHistoryPopover(); return; }
+      const history = getState().history;
+      const pop = document.createElement('div');
+      pop.className = 'desc-history-popover';
+      if (!history.length) {
+        const empty = document.createElement('div');
+        empty.className = 'desc-history-empty';
+        empty.textContent = 'No previous versions yet';
+        pop.appendChild(empty);
+      } else {
+        history.forEach(value => {
+          const row = document.createElement('div');
+          row.className = 'desc-history-row';
+          const preview = document.createElement('span');
+          preview.className = 'desc-history-preview';
+          const plain = value.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\[(.+?)\]\(.+?\)/g, '$1');
+          preview.textContent = plain.slice(0, 40) || '(empty)';
+          row.appendChild(preview);
+          const btnRestore = document.createElement('button');
+          btnRestore.type = 'button';
+          btnRestore.textContent = 'Restore';
+          btnRestore.addEventListener('mousedown', e => e.preventDefault());
+          btnRestore.addEventListener('click', () => {
+            parseDescriptionToDOM(value, body);
+            setDraft(value);
+            closeHistoryPopover();
+          });
+          row.appendChild(btnRestore);
+          pop.appendChild(row);
+        });
+      }
+      toolbar.appendChild(pop);
+      historyPopover = pop;
+    });
+    toolbar.appendChild(btnHistory);
+
+    const btnFullscreen = document.createElement('button');
+    btnFullscreen.type = 'button';
+    btnFullscreen.textContent = '⛶';
+    btnFullscreen.title = 'Toggle fullscreen';
+    btnFullscreen.addEventListener('mousedown', e => e.preventDefault());
+    btnFullscreen.addEventListener('click', () => modal.classList.toggle('fullscreen'));
+    toolbar.appendChild(btnFullscreen);
+
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'desc-editor-close';
+    btnClose.textContent = '✕';
+    btnClose.title = 'Close (saves automatically)';
+    header.appendChild(btnClose);
+
+    modal.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'desc-editor-body';
+    body.contentEditable = 'true';
+    parseDescriptionToDOM(startingContent, body);
+    modal.appendChild(body);
+
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+
+    let saveTimer = null;
+    function scheduleAutosave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        setDraft(serializeDOMToDescription(body));
+      }, 500);
+    }
+    body.addEventListener('input', scheduleAutosave);
+    // Clicking back into the editing area closes an open history popover.
+    body.addEventListener('mousedown', closeHistoryPopover);
+
+    function close() {
+      clearTimeout(saveTimer);
+      const finalValue = serializeDOMToDescription(body);
+      document.removeEventListener('keydown', onKeydown);
+      backdrop.remove();
+      openDescEditor = null;
+      finalize(finalValue);
+    }
+
+    btnClose.addEventListener('click', close);
+    backdrop.addEventListener('mousedown', e => {
+      if (e.target === backdrop) close();
+    });
+    function onKeydown(e) {
+      if (e.key === 'Escape') close();
+    }
+    document.addEventListener('keydown', onKeydown);
+
+    body.focus();
+
+    openDescEditor = {
+      cleanup: () => {
+        clearTimeout(saveTimer);
+        document.removeEventListener('keydown', onKeydown);
+        backdrop.remove();
+      },
+    };
+  }
 
   function commitDraft() {
     if (!draft.name.trim()) return;
-    TaskStore.add({ ...draft, labels: [...draft.labels] });
+    TaskStore.add({ ...draft });
     FileManager.scheduleSave();
     draft = DRAFT_DEFAULTS();
     render();
@@ -442,22 +940,19 @@ const UI = (() => {
     const tr = document.createElement('tr');
     tr.className = 'draft-row';
 
-    // Commit when focus leaves the entire row (tab-between-cells safe)
+    // Commit when focus leaves the entire row (tab-between-cells safe).
+    // Suppressed while the description editor is open for this row: that
+    // modal deliberately moves focus outside the row (its body lives in
+    // document.body, not inside td/tr), which would otherwise look like the
+    // user tabbed away and trigger a premature commit mid-edit.
     let blurTimer = null;
+    let descEditorOpenForDraft = false;
     tr.addEventListener('focusout', () => {
       blurTimer = setTimeout(() => {
-        if (!tr.contains(document.activeElement)) commitDraft();
+        if (!descEditorOpenForDraft && !openDescEditor && !tr.contains(document.activeElement)) commitDraft();
       }, 150);
     });
     tr.addEventListener('focusin', () => clearTimeout(blurTimer));
-
-    let draftPriorityTd = null;
-    const refreshDraftPriority = () => {
-      if (draftPriorityTd) {
-        draftPriorityTd.textContent = draft.priority;
-        draftPriorityTd.style.background = priorityColor(draft.priority);
-      }
-    };
 
     for (const col of COLUMNS) {
       const td = document.createElement('td');
@@ -469,62 +964,26 @@ const UI = (() => {
           td.textContent = '+';
           break;
 
-        case 'impact': {
-          td.className = 'cell-impact';
-          td.style.background = impactColor(draft.impact);
-          td.style.color = '#1a1a1a';
-          const sel = document.createElement('select');
-          sel.className = 'cell-select';
-          sel.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
-          IMPACT_VALUES.forEach(v => {
-            const opt = document.createElement('option');
-            opt.value = v; opt.textContent = v;
-            opt.style.background = impactColor(v);
-            opt.style.color = '#1a1a1a';
-            if (v === draft.impact) opt.selected = true;
-            sel.appendChild(opt);
+        case 'quadrant': {
+          td.className = 'cell-quadrant';
+          const renderBadge = () => {
+            const q = quadrantLabel(draft);
+            const st = QUADRANT_STYLE[q];
+            td.textContent = q;
+            td.style.background = st.bg;
+            td.style.color = st.text;
+          };
+          renderBadge();
+          // Prevent blur so the draft row isn't committed prematurely while
+          // the quadrant picker is open (same idiom as btnAdd below).
+          td.addEventListener('mousedown', e => e.preventDefault());
+          td.addEventListener('click', () => {
+            openQuadrantPicker(td, q => {
+              draft.important = (q === 'important' || q === 'both');
+              draft.urgent    = (q === 'urgent'    || q === 'both');
+              renderBadge();
+            });
           });
-          sel.addEventListener('change', e => {
-            draft.impact = Number(e.target.value);
-            draft.priority = draft.impact * draft.urgency;
-            td.style.background = impactColor(draft.impact);
-            refreshDraftPriority();
-          });
-          td.appendChild(sel);
-          break;
-        }
-
-        case 'urgency': {
-          td.className = 'cell-urgency';
-          td.style.background = urgencyColor(draft.urgency);
-          td.style.color = '#1a1a1a';
-          const sel = document.createElement('select');
-          sel.className = 'cell-select';
-          sel.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
-          for (let v = 1; v <= 10; v++) {
-            const opt = document.createElement('option');
-            opt.value = v; opt.textContent = v;
-            opt.style.background = urgencyColor(v);
-            opt.style.color = '#1a1a1a';
-            if (v === draft.urgency) opt.selected = true;
-            sel.appendChild(opt);
-          }
-          sel.addEventListener('change', e => {
-            draft.urgency = Number(e.target.value);
-            draft.priority = draft.impact * draft.urgency;
-            td.style.background = urgencyColor(draft.urgency);
-            refreshDraftPriority();
-          });
-          td.appendChild(sel);
-          break;
-        }
-
-        case 'priority': {
-          td.className = 'cell-priority';
-          draftPriorityTd = td;
-          td.textContent = draft.priority;
-          td.style.background = priorityColor(draft.priority);
-          td.style.color = '#fff';
           break;
         }
 
@@ -548,33 +1007,84 @@ const UI = (() => {
           break;
         }
 
-        case 'labels': {
-          td.className = 'cell-labels';
-          const inp = document.createElement('input');
-          inp.type = 'text'; inp.className = 'cell-input';
-          inp.placeholder = 'Labels…';
-          inp.setAttribute('list', 'labels-datalist');
-          inp.value = draft.labels.join(', ');
-          inp.addEventListener('change', e => {
-            draft.labels = e.target.value.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+        case 'topic': {
+          td.className = 'cell-topic';
+          const renderBadge = () => {
+            td.textContent = draft.topic || '';
+            td.style.background = '';
+            td.style.color = draft.topic ? labelTextColor(draft.topic) : '';
+          };
+          renderBadge();
+          // Prevent blur so the draft row isn't committed prematurely while
+          // the combobox is open (same idiom as the quadrant picker above).
+          td.addEventListener('mousedown', e => e.preventDefault());
+          td.addEventListener('click', () => {
+            openTopicCombobox(td, draft.topic, value => {
+              if (value !== null) {
+                draft.topic = value;
+                refreshTopicDatalist();
+              }
+              renderBadge();
+            }, renderBadge);
           });
-          let tabPending = false;
-          inp.addEventListener('keydown', e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              const raw = inp.value.trim();
-              if (raw) draft.labels = [...new Set(raw.split(/[,;]/).map(s => s.trim()).filter(Boolean))];
-              commitDraft();
-            } else if (e.key === 'Tab') {
-              const raw = inp.value.trim();
-              if (raw) draft.labels = [...new Set(raw.split(/[,;]/).map(s => s.trim()).filter(Boolean))];
-              tabPending = true;
+          break;
+        }
+
+        case 'name': {
+          td.className = 'cell-name';
+          const span = document.createElement('span');
+          span.className = 'name-text';
+          span.contentEditable = 'true';
+          span.textContent = draft.name || '';
+          span.dataset.placeholder = 'Name…';
+          span.addEventListener('input', e => { draft.name = e.target.textContent; });
+          span.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitDraft(); }
+          });
+          td.appendChild(span);
+
+          const icon = document.createElement('button');
+          icon.type = 'button';
+          icon.className = 'name-desc-icon';
+          icon.textContent = '📝';
+          const applyIconState = () => {
+            icon.classList.remove('has-draft', 'has-content');
+            if (draft.descriptionDraft !== null) {
+              icon.classList.add('has-draft');
+              icon.title = 'Draft in progress — click to continue editing';
+            } else if (draft.description) {
+              icon.classList.add('has-content');
+              icon.title = 'Description';
+            } else {
+              icon.title = 'No description';
             }
+          };
+          applyIconState();
+          // Prevent blur so clicking the icon doesn't commit the draft row
+          // prematurely (same idiom as the quadrant picker and topic
+          // combobox above).
+          icon.addEventListener('mousedown', e => e.preventDefault());
+          icon.addEventListener('click', () => {
+            // The editor's body lives outside the row (document.body) and
+            // takes focus, which would otherwise arm the row's blur-commit
+            // safety net; suppress it for the duration of the editor session.
+            descEditorOpenForDraft = true;
+            openDescriptionEditor({
+              taskName: draft.name,
+              getState: () => ({ description: draft.description, history: draft.descriptionHistory, draft: draft.descriptionDraft }),
+              setDraft: value => { draft.descriptionDraft = value; applyIconState(); },
+              finalize: value => {
+                if (value !== draft.description) {
+                  draft.descriptionHistory = [draft.description, ...draft.descriptionHistory].slice(0, 2);
+                  draft.description = value;
+                }
+                draft.descriptionDraft = null;
+                descEditorOpenForDraft = false;
+                applyIconState();
+              },
+            });
           });
-          inp.addEventListener('blur', () => {
-            if (tabPending) { tabPending = false; commitDraft(); }
-          });
-          td.appendChild(inp);
+          td.appendChild(icon);
           break;
         }
 
@@ -625,7 +1135,7 @@ const UI = (() => {
   }
 
   function focusDraftName() {
-    const cell = document.querySelector('.draft-row td[data-placeholder="Name…"]');
+    const cell = document.querySelector('.draft-row .name-text[data-placeholder="Name…"]');
     if (cell) cell.focus();
   }
 
@@ -641,11 +1151,84 @@ const UI = (() => {
     }
   }
 
+  // ── Resizable columns ──────────────────────────────────────────────────
+  // Column widths are percentages of the table's own width, not pixels —
+  // since every column (including the trailing delete column) is given an
+  // explicit width and they sum to exactly 100%, table-layout:fixed has no
+  // leftover/shortfall to redistribute, so nothing ever gets stretched or
+  // shrunk by the browser. Proportions are therefore preserved automatically
+  // across any viewport size with zero JS recalculation needed on resize —
+  // pure CSS percentage math. Persisted to localStorage so a drag survives
+  // reloads; both tables (main + private) always mirror the same widths.
+  const COLUMN_WIDTHS_KEY = 'enceladus-column-widths';
+  const DEFAULT_COLUMN_WIDTHS = {
+    id: 2.3, priority: 4.8, createdAt: 9.8, dueDate: 9.8, topic: 5.8,
+    name: 22.6, nextActionDate: 9.8, nextAction: 15.3, contact: 8.4,
+    status: 9.3, del: 2.1,
+  };
+  const MIN_COLUMN_PCT = 2;
+
+  function loadColumnWidths() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(COLUMN_WIDTHS_KEY));
+      if (saved && typeof saved === 'object') return { ...DEFAULT_COLUMN_WIDTHS, ...saved };
+    } catch (e) { /* ignore malformed storage, fall through to defaults */ }
+    return { ...DEFAULT_COLUMN_WIDTHS };
+  }
+
+  function saveColumnWidths(widths) {
+    localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(widths));
+  }
+
+  function applyColumnWidths(widths) {
+    for (const id of ['task-table', 'private-table']) {
+      const tbl = document.getElementById(id);
+      for (const key of Object.keys(widths)) {
+        const col = tbl.querySelector(`col.col-${key}`);
+        if (col) col.style.width = `${widths[key]}%`;
+      }
+    }
+  }
+
+  // Dragging a column's handle trades width with the column immediately to
+  // its right (the classic spreadsheet resize model) — the sum stays 100%
+  // by construction, so no other column is ever affected.
+  function startColumnResize(e, colKey, nextColKey) {
+    e.preventDefault();
+    const table = document.getElementById('task-table');
+    const startX = e.clientX;
+    const tableWidth = table.getBoundingClientRect().width;
+    const widths = loadColumnWidths();
+    const startPct = widths[colKey];
+    const startNextPct = widths[nextColKey];
+    document.body.classList.add('col-resizing');
+
+    function onMouseMove(e2) {
+      const deltaPct = ((e2.clientX - startX) / tableWidth) * 100;
+      let newPct = startPct + deltaPct;
+      let newNextPct = startNextPct - deltaPct;
+      if (newPct < MIN_COLUMN_PCT) { newNextPct -= (MIN_COLUMN_PCT - newPct); newPct = MIN_COLUMN_PCT; }
+      if (newNextPct < MIN_COLUMN_PCT) { newPct -= (MIN_COLUMN_PCT - newNextPct); newNextPct = MIN_COLUMN_PCT; }
+      widths[colKey] = newPct;
+      widths[nextColKey] = newNextPct;
+      applyColumnWidths(widths);
+    }
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.classList.remove('col-resizing');
+      saveColumnWidths(widths);
+    }
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
   function buildHeaders() {
     const { sortKey, sortDir } = SortController.getState();
     const row = document.getElementById('header-row');
     row.innerHTML = '';
-    for (const col of COLUMNS) {
+    for (let i = 0; i < COLUMNS.length; i++) {
+      const col = COLUMNS[i];
       const th = document.createElement('th');
       th.textContent = col.label;
       if (col.sortable) {
@@ -653,6 +1236,18 @@ const UI = (() => {
         th.addEventListener('click', () => SortController.toggle(col.key));
       } else {
         th.style.cursor = 'default';
+      }
+      // Resize handle: trades width with the next column, so the last data
+      // column (paired with the fixed, undraggable delete column) gets none.
+      if (i < COLUMNS.length - 1) {
+        const handle = document.createElement('span');
+        handle.className = 'col-resize-handle';
+        handle.addEventListener('click', e => e.stopPropagation()); // never trigger sort
+        handle.addEventListener('mousedown', e => {
+          e.stopPropagation();
+          startColumnResize(e, col.key, COLUMNS[i + 1].key);
+        });
+        th.appendChild(handle);
       }
       row.appendChild(th);
     }
@@ -678,13 +1273,23 @@ const UI = (() => {
           renderBody();
         });
         th.appendChild(sel);
+      } else if (col.type === 'quadrant') {
+        const sel = document.createElement('select');
+        sel.innerHTML = `<option value="">All</option>` +
+          QUADRANT_ORDER.map(q => `<option value="${q}">${q}</option>`).join('');
+        sel.value = FilterController.get(col.key);
+        sel.addEventListener('change', e => {
+          FilterController.set(col.key, e.target.value);
+          renderBody();
+        });
+        th.appendChild(sel);
       } else {
         const inp = document.createElement('input');
         inp.type = 'search';
         inp.placeholder = col.label;
         inp.value = FilterController.get(col.key);
-        if (col.type === 'labels') {
-          inp.setAttribute('list', 'labels-datalist');
+        if (col.type === 'topic') {
+          inp.setAttribute('list', 'topic-datalist');
         }
         inp.addEventListener('input', e => {
           FilterController.set(col.key, e.target.value);
@@ -708,19 +1313,19 @@ const UI = (() => {
     });
     thClear.appendChild(btnClear);
     row.appendChild(thClear);
-    refreshLabelDatalist();
+    refreshTopicDatalist();
   }
 
-  function refreshLabelDatalist() {
-    let dl = document.getElementById('labels-datalist');
+  function refreshTopicDatalist() {
+    let dl = document.getElementById('topic-datalist');
     if (!dl) {
       dl = document.createElement('datalist');
-      dl.id = 'labels-datalist';
+      dl.id = 'topic-datalist';
       document.body.appendChild(dl);
     }
-    dl.replaceChildren(...TaskStore.allLabels().map(l => {
+    dl.replaceChildren(...TaskStore.topicCounts().map(c => {
       const opt = document.createElement('option');
-      opt.value = l;
+      opt.value = c.topic;
       return opt;
     }));
   }
@@ -748,13 +1353,6 @@ const UI = (() => {
       return;
     }
 
-    // Relative priority heatmap — scale to visible set
-    const priorities = tasks.map(t => t.priority || 1);
-    const minP = Math.min(...priorities);
-    const maxP = Math.max(...priorities);
-    const prioSpan = maxP > minP ? maxP - minP : 1;
-    const prioT = val => (val - minP) / prioSpan;
-
     for (const task of tasks) {
       const tr = document.createElement('tr');
       tr.dataset.uuid = task.uuid;
@@ -770,66 +1368,27 @@ const UI = (() => {
             td.textContent = task[col.key];
             break;
 
-          case 'impact': {
-            td.className = 'cell-impact';
-            td.style.background = impactColor(task.impact || 1);
-            td.style.color = '#1a1a1a';
-            const selI = document.createElement('select');
-            selI.className = 'cell-select';
-            selI.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
-            IMPACT_VALUES.forEach(v => {
-              const opt = document.createElement('option');
-              opt.value = v; opt.textContent = v;
-              opt.style.background = impactColor(v);
-              opt.style.color = '#1a1a1a';
-              if (v === (task.impact || 1)) opt.selected = true;
-              selI.appendChild(opt);
+          case 'quadrant': {
+            td.className = 'cell-quadrant';
+            const applyBadge = t => {
+              const q = quadrantLabel(t);
+              const st = QUADRANT_STYLE[q];
+              td.textContent = q;
+              td.style.background = st.bg;
+              td.style.color = st.text;
+            };
+            applyBadge(task);
+            td.addEventListener('click', () => {
+              openQuadrantPicker(td, q => {
+                const important = (q === 'important' || q === 'both');
+                const urgent    = (q === 'urgent'    || q === 'both');
+                TaskStore.update(task.uuid, 'important', important);
+                TaskStore.update(task.uuid, 'urgent', urgent);
+                FileManager.scheduleSave();
+                const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
+                applyBadge(cur);
+              });
             });
-            selI.addEventListener('change', e => {
-              const newImpact = Number(e.target.value);
-              TaskStore.update(task.uuid, 'impact', newImpact);
-              const cur = TaskStore.getAll().find(t => t.uuid === task.uuid);
-              TaskStore.update(task.uuid, 'priority', newImpact * (cur?.urgency || 1));
-              FileManager.scheduleSave();
-              renderBody();
-            });
-            td.appendChild(selI);
-            break;
-          }
-
-          case 'urgency': {
-            td.className = 'cell-urgency';
-            td.style.background = urgencyColor(task.urgency || 5);
-            td.style.color = '#1a1a1a';
-            const selU = document.createElement('select');
-            selU.className = 'cell-select';
-            selU.style.cssText = 'background:transparent;color:inherit;font-weight:700;width:100%;text-align:center;';
-            for (let v = 1; v <= 10; v++) {
-              const opt = document.createElement('option');
-              opt.value = v; opt.textContent = v;
-              opt.style.background = urgencyColor(v);
-              opt.style.color = '#1a1a1a';
-              if (v === (task.urgency || 5)) opt.selected = true;
-              selU.appendChild(opt);
-            }
-            selU.addEventListener('change', e => {
-              const newUrgency = Number(e.target.value);
-              TaskStore.update(task.uuid, 'urgency', newUrgency);
-              const cur = TaskStore.getAll().find(t => t.uuid === task.uuid);
-              TaskStore.update(task.uuid, 'priority', (cur?.impact || 1) * newUrgency);
-              FileManager.scheduleSave();
-              renderBody();
-            });
-            td.appendChild(selU);
-            break;
-          }
-
-          case 'priority': {
-            td.className = 'cell-priority';
-            const p = task.priority || 1;
-            td.textContent = p;
-            td.style.background = heatRgb(prioT(p));
-            td.style.color = '#fff';
             break;
           }
 
@@ -855,124 +1414,86 @@ const UI = (() => {
             break;
           }
 
-          case 'labels': {
-            td.className = 'cell-labels';
-            const wrap = document.createElement('div');
-            wrap.className = 'label-cell';
-
-            const getLabels = () => {
-              const t = TaskStore.getAll().find(x => x.uuid === task.uuid);
-              return t ? (t.labels || []) : [];
+          case 'topic': {
+            td.className = 'cell-topic';
+            const applyBadge = t => {
+              td.textContent = t.topic || '';
+              td.style.background = '';
+              td.style.color = t.topic ? labelTextColor(t.topic) : '';
             };
-
-            const inp = document.createElement('input');
-            inp.type = 'text';
-            inp.className = 'label-input';
-            inp.placeholder = '+';
-            inp.setAttribute('list', 'labels-datalist');
-
-            const renderChips = () => {
-              wrap.querySelectorAll('.label-chip').forEach(c => c.remove());
-              getLabels().forEach(lbl => {
-                const chip = document.createElement('span');
-                chip.className = 'label-chip';
-                chip.style.background = labelColor(lbl);
-                chip.draggable = true;
-
-                chip.addEventListener('dragstart', e => {
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', lbl);
-                  chip.classList.add('dragging');
-                });
-                chip.addEventListener('dragend', () => {
-                  chip.classList.remove('dragging');
-                  wrap.querySelectorAll('.label-chip').forEach(c => c.classList.remove('drag-over'));
-                });
-                chip.addEventListener('dragover', e => {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = 'move';
-                  if (!chip.classList.contains('dragging')) {
-                    wrap.querySelectorAll('.label-chip').forEach(c => c.classList.remove('drag-over'));
-                    chip.classList.add('drag-over');
-                  }
-                });
-                chip.addEventListener('dragleave', () => chip.classList.remove('drag-over'));
-                chip.addEventListener('drop', e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const from = e.dataTransfer.getData('text/plain');
-                  if (from === lbl) return;
-                  const labels = getLabels();
-                  const fi = labels.indexOf(from);
-                  const ti = labels.indexOf(lbl);
-                  if (fi === -1 || ti === -1) return;
-                  const reordered = [...labels];
-                  reordered.splice(fi, 1);
-                  reordered.splice(ti, 0, from);
-                  TaskStore.update(task.uuid, 'labels', reordered);
+            applyBadge(task);
+            td.addEventListener('click', () => {
+              openTopicCombobox(td, task.topic, value => {
+                if (value !== null) {
+                  TaskStore.update(task.uuid, 'topic', value);
                   FileManager.scheduleSave();
-                  renderChips();
-                });
+                  refreshTopicDatalist();
+                }
+                const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
+                applyBadge(cur);
+              }, () => applyBadge(task));
+            });
+            break;
+          }
 
-                const txt = document.createElement('span');
-                txt.textContent = lbl;
-                chip.appendChild(txt);
-                const x = document.createElement('button');
-                x.className = 'label-chip-x';
-                x.textContent = '×';
-                x.addEventListener('click', () => {
-                  TaskStore.update(task.uuid, 'labels', getLabels().filter(l => l !== lbl));
-                  FileManager.scheduleSave();
-                  renderChips();
-                  refreshLabelDatalist();
-                });
-                chip.appendChild(x);
-                wrap.insertBefore(chip, inp);
-              });
-            };
-
-            // Drop on empty space after last chip → move to end
-            wrap.addEventListener('dragover', e => e.preventDefault());
-            wrap.addEventListener('drop', e => {
-              e.preventDefault();
-              const from = e.dataTransfer.getData('text/plain');
-              if (!from) return;
-              const labels = getLabels();
-              const fi = labels.indexOf(from);
-              if (fi === -1 || fi === labels.length - 1) return;
-              const reordered = [...labels];
-              reordered.splice(fi, 1);
-              reordered.push(from);
-              TaskStore.update(task.uuid, 'labels', reordered);
+          case 'name': {
+            td.className = 'cell-name';
+            const span = document.createElement('span');
+            span.className = 'name-text';
+            span.contentEditable = 'true';
+            span.textContent = task.name || '';
+            span.addEventListener('blur', e => {
+              TaskStore.update(task.uuid, 'name', e.target.textContent.trim());
               FileManager.scheduleSave();
-              renderChips();
             });
+            span.addEventListener('keydown', e => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); span.blur(); }
+            });
+            td.appendChild(span);
 
-            const commit = () => {
-              const val = inp.value.replace(/[,;]/g, '').trim();
-              if (val && !getLabels().includes(val)) {
-                TaskStore.update(task.uuid, 'labels', [...getLabels(), val]);
-                FileManager.scheduleSave();
-                refreshLabelDatalist();
+            const icon = document.createElement('button');
+            icon.type = 'button';
+            icon.className = 'name-desc-icon';
+            icon.textContent = '📝';
+            const applyIconState = t => {
+              icon.classList.remove('has-draft', 'has-content');
+              if (t.descriptionDraft !== null) {
+                icon.classList.add('has-draft');
+                icon.title = 'Draft in progress — click to continue editing';
+              } else if (t.description) {
+                icon.classList.add('has-content');
+                icon.title = 'Description';
+              } else {
+                icon.title = 'No description';
               }
-              inp.value = '';
-              renderChips();
             };
-
-            inp.addEventListener('keydown', e => {
-              if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
-                e.preventDefault();
-                commit();
-              }
+            applyIconState(task);
+            icon.addEventListener('click', () => {
+              openDescriptionEditor({
+                taskName: task.name,
+                getState: () => {
+                  const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
+                  return { description: cur.description, history: cur.descriptionHistory, draft: cur.descriptionDraft };
+                },
+                setDraft: value => {
+                  TaskStore.update(task.uuid, 'descriptionDraft', value);
+                  FileManager.scheduleSave();
+                  applyIconState(TaskStore.getAll().find(x => x.uuid === task.uuid));
+                },
+                finalize: value => {
+                  const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
+                  if (value !== cur.description) {
+                    const newHistory = [cur.description, ...cur.descriptionHistory].slice(0, 2);
+                    TaskStore.update(task.uuid, 'descriptionHistory', newHistory);
+                    TaskStore.update(task.uuid, 'description', value);
+                  }
+                  TaskStore.update(task.uuid, 'descriptionDraft', null);
+                  FileManager.scheduleSave();
+                  applyIconState(TaskStore.getAll().find(x => x.uuid === task.uuid));
+                },
+              });
             });
-            inp.addEventListener('input', () => {
-              if (inp.value.endsWith(',') || inp.value.endsWith(';')) commit();
-            });
-            inp.addEventListener('change', () => commit());
-
-            wrap.appendChild(inp);
-            renderChips();
-            td.appendChild(wrap);
+            td.appendChild(icon);
             break;
           }
 
@@ -1031,7 +1552,7 @@ const UI = (() => {
       tdDel.appendChild(btnDel);
       tr.appendChild(tdDel);
 
-      const isPrivate = task.labels.some(l => l.toLowerCase() === 'private');
+      const isPrivate = !!task.topic && task.topic.toLowerCase() === 'private';
       (isPrivate ? privateBody : tbody).appendChild(tr);
     }
     document.getElementById('private-wrapper').classList.toggle('hidden', privateBody.childElementCount === 0);
@@ -1043,7 +1564,11 @@ const UI = (() => {
   }
 
   function render() {
+    closeQuadrantPicker(); // backstop: never leave a picker orphaned by a full re-render
+    closeTopicCombobox();  // same backstop, for the topic combobox
+    closeDescriptionEditor(); // same backstop, for the description editor
     buildColgroup();
+    applyColumnWidths(loadColumnWidths());
     buildHeaders();
     buildFilterRow();
     const filtered = FilterController.apply(SortController.apply(TaskStore.getAll()));
