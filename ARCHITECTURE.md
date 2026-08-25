@@ -52,7 +52,9 @@ enceladus/
     "dueDate": "2026-06-01",
     "nextActionDate": "2026-05-25",
     "name": "Example task",
-    "description": "Longer description",
+    "description": "Longer description with **bold** and [links](https://example.com)",
+    "descriptionHistory": [],
+    "descriptionDraft": null,
     "nextAction": "Send email",
     "contact": "Jane Doe",
     "topic": "work",
@@ -73,6 +75,7 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | `createdAt` as ISO datetime | truncated to date (`YYYY-MM-DD`) |
 | `impact`/`urgency`/`priority` (numeric) | converted to `important`/`urgent` booleans: `important = impact !== 1`, `urgent = urgency !== 5` (old defaults); old fields deleted |
 | `labels` (array) | converted to a single `topic` string: `'private'` anywhere in the array wins (`topic = 'Private'`), otherwise the first label is used, or `''` if none |
+| missing `descriptionHistory`/`descriptionDraft` | defaulted to `[]` / `null` (purely additive — `description`'s own content needs no migration) |
 
 ## UI Modules (all in `app.js`)
 
@@ -95,8 +98,7 @@ The loader (`TaskStore.load`) handles older formats transparently:
 | `createdAt` | Created | date | Set to today on task creation |
 | `dueDate` | Due | date | Optional; faint placeholder when empty |
 | `topic` | Topic | topic | Single string; search-as-you-type combobox (click cell), create-on-the-fly, top-8-by-frequency suggestions, DJB2 hash colour |
-| `name` | Name | text | Bold; required to commit draft |
-| `description` | Description | text | Free text |
+| `name` | Name | name | Bold; required to commit draft. Includes a 📝 icon opening the description editor (see below). |
 | `nextActionDate` | Next action | date | Optional; faint placeholder when empty |
 | `nextAction` | Next action | text | Free text |
 | `contact` | Contact | text | Free text |
@@ -134,9 +136,36 @@ Clicking the Priority cell opens a 2×2 matrix picker — Important axis
 vertical (top = yes), Urgent axis horizontal (right = yes); Important+Urgent
 (`urg&import`) is the top-right cell — to set both booleans at once.
 
+## Description Editor
+
+`description` holds lightweight markdown (`**bold**`, `[text](url)`, `\n`
+for line breaks) — nothing else. Rendered via `parseDescriptionToDOM`/
+`serializeDOMToDescription` (`app.js`), which build/read DOM exclusively via
+`createElement`/`textContent`, never `innerHTML` — link URLs are only
+turned into clickable `<a>` elements when they start with `http://`,
+`https://`, or `mailto:`.
+
+Click the 📝 icon next to a task's Name to open a WYSIWYG modal editor
+(`contenteditable`, formatted via `document.execCommand`). While open, the
+in-progress content is continuously autosaved (500ms debounce, same
+convention as the rest of the app) into `descriptionDraft` — closing the
+editor (×, Escape, or clicking the backdrop) promotes that draft to
+`description` and shifts the previous `description` into
+`descriptionHistory` (capped at 2 entries, most-recent-previous first). The
+🕐 toolbar button shows those up to 2 previous versions with a Restore
+action — a safety net against accidental overwrites, not a full revision
+browser.
+
+The icon itself reflects state: dimmed when there's no description and no
+draft, normal when there's a saved description, and accent-highlighted
+whenever `descriptionDraft` is non-null — including after reopening a file
+where an editing session was interrupted (e.g. the browser closed
+mid-edit), since the draft persists in the saved file and is resumed (not
+silently discarded or finalized) the next time that task's icon is clicked.
+
 ## Interaction Model
 
-- **Edit**: click any editable cell → `contenteditable` or `<input>`/`<select>`
+- **Edit**: click any editable cell → `contenteditable` or `<input>`/`<select>`; Name also has a 📝 icon opening the description editor (see above)
 - **New task**: draft row is always visible at the top of the table; fill in Name
   and press Enter, or click ＋ to commit
 - **Topic**: click the cell to edit — text input opens with the current value

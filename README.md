@@ -6,6 +6,7 @@ A private, client-side-only todo list app. No server, no accounts, no data ever 
 
 - **Eisenhower-quadrant prioritisation** — pick `base` / `important` / `urgent` / `urg&import` from a colour-coded 2×2 matrix popup
 - **Inline editing** — click any cell to edit; changes auto-save after 500 ms
+- **Description editor** — click the 📝 icon next to a task's Name to open a WYSIWYG editor (bold, links, line breaks); autosaves continuously as a draft while open, keeps the last 2 versions as a safety net
 - **Status workflow** — Today · Workable · In Progress · New · Pending feedback · Meeting scheduled · On-Hold · Closed, each colour-coded by urgency
 - **Date urgency highlighting** — Due and Next Action dates turn blue (today), pale blue (tomorrow), or red (overdue)
 - **Topic** — single-select field with search-as-you-type, create-on-the-fly, and dynamic DJB2 hash colours
@@ -52,7 +53,9 @@ Tasks are stored as a plain JSON array in a file of your choosing:
     "dueDate": "2026-06-01",
     "nextActionDate": "2026-05-25",
     "name": "Example task",
-    "description": "Longer description",
+    "description": "Longer description with **bold** and [links](https://example.com)",
+    "descriptionHistory": [],
+    "descriptionDraft": null,
     "nextAction": "Send email",
     "contact": "Jane Doe",
     "topic": "work",
