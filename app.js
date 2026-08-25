@@ -104,9 +104,12 @@ const TaskStore = (() => {
         task.topic = privateLabel ? 'Private' : (task.labels[0] || '');
       }
       delete task.labels;
-      // Migrate: default the description-versioning fields if absent (purely additive).
-      if (task.descriptionHistory === undefined) task.descriptionHistory = [];
-      if (task.descriptionDraft === undefined) task.descriptionDraft = null;
+      // Migrate: default the description-versioning fields if absent or malformed
+      // (purely additive; also guards against hand-edited/corrupt files crashing
+      // the editor on open).
+      if (typeof task.description !== 'string') task.description = '';
+      if (!Array.isArray(task.descriptionHistory)) task.descriptionHistory = [];
+      if (typeof task.descriptionDraft !== 'string' && task.descriptionDraft !== null) task.descriptionDraft = null;
       // Migrate old "Done" status to "Closed"
       if (task.status === 'Done') task.status = 'Closed';
       // Migrate missing createdAt; truncate old ISO datetime to date
@@ -494,12 +497,27 @@ function serializeDOMToDescription(container) {
     const tag = node.tagName.toLowerCase();
     if (tag === 'b' || tag === 'strong') return `**${inner}**`;
     if (tag === 'a') return `[${inner}](${node.getAttribute('href') || ''})`;
-    if (tag === 'br') return '';
+    if (tag === 'br') return node.parentNode.childNodes.length === 1 ? '' : '\n';
     return inner; // unexpected wrapper (e.g. execCommand quirks) — just recurse
   }
-  return [...container.children].map(div =>
-    [...div.childNodes].map(serializeNode).join('')
-  ).join('\n');
+  // Walk ALL child nodes (not just element children): Chrome removes the
+  // div-per-line wrapper structure the moment the editor is emptied and
+  // fresh content is typed, so bare text/inline nodes can land directly on
+  // the container. Treat DIV/P as explicit line boundaries and accumulate
+  // any other node into an implicit "pending" line so nothing is dropped.
+  const lines = [];
+  let pending = null;
+  const flush = () => { if (pending !== null) { lines.push(pending); pending = null; } };
+  for (const node of container.childNodes) {
+    if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === 'DIV' || node.tagName === 'P')) {
+      flush();
+      lines.push([...node.childNodes].map(serializeNode).join(''));
+    } else {
+      pending = (pending || '') + serializeNode(node);
+    }
+  }
+  flush();
+  return lines.join('\n');
 }
 
 // ── UI ──────────────────────────────────────────────────────────────────────
@@ -926,7 +944,7 @@ const UI = (() => {
     let descEditorOpenForDraft = false;
     tr.addEventListener('focusout', () => {
       blurTimer = setTimeout(() => {
-        if (!descEditorOpenForDraft && !tr.contains(document.activeElement)) commitDraft();
+        if (!descEditorOpenForDraft && !openDescEditor && !tr.contains(document.activeElement)) commitDraft();
       }, 150);
     });
     tr.addEventListener('focusin', () => clearTimeout(blurTimer));
