@@ -721,6 +721,109 @@ const UI = (() => {
     };
   }
 
+  // ── Description editor (shared by draft row + existing rows) ─────────────
+  let openDescEditor = null;
+
+  function closeDescriptionEditor() {
+    if (openDescEditor) {
+      openDescEditor.cleanup();
+      openDescEditor = null;
+    }
+  }
+
+  function openDescriptionEditor({ taskName, getState, setDraft, finalize }) {
+    closeDescriptionEditor();
+
+    const state = getState();
+    const startingContent = state.draft !== null ? state.draft : state.description;
+    if (state.draft === null) {
+      // Starting a fresh session: mark a draft as "in progress" immediately,
+      // even before any keystroke — crash-safety from the first moment, and
+      // the icon reflects "draft in progress" right away.
+      setDraft(startingContent);
+    }
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'desc-editor-backdrop';
+
+    const modal = document.createElement('div');
+    modal.className = 'desc-editor';
+
+    const header = document.createElement('div');
+    header.className = 'desc-editor-header';
+    const titleEl = document.createElement('span');
+    titleEl.className = 'desc-editor-title';
+    titleEl.textContent = taskName || '(untitled task)';
+    header.appendChild(titleEl);
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'desc-editor-toolbar';
+    header.appendChild(toolbar);
+
+    const btnFullscreen = document.createElement('button');
+    btnFullscreen.type = 'button';
+    btnFullscreen.textContent = '⛶';
+    btnFullscreen.title = 'Toggle fullscreen';
+    btnFullscreen.addEventListener('mousedown', e => e.preventDefault());
+    btnFullscreen.addEventListener('click', () => modal.classList.toggle('fullscreen'));
+    toolbar.appendChild(btnFullscreen);
+
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'desc-editor-close';
+    btnClose.textContent = '✕';
+    btnClose.title = 'Close (saves automatically)';
+    header.appendChild(btnClose);
+
+    modal.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'desc-editor-body';
+    body.contentEditable = 'true';
+    parseDescriptionToDOM(startingContent, body);
+    modal.appendChild(body);
+
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+
+    let saveTimer = null;
+    function scheduleAutosave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        setDraft(serializeDOMToDescription(body));
+      }, 500);
+    }
+    body.addEventListener('input', scheduleAutosave);
+
+    function close() {
+      clearTimeout(saveTimer);
+      const finalValue = serializeDOMToDescription(body);
+      document.removeEventListener('keydown', onKeydown);
+      backdrop.remove();
+      openDescEditor = null;
+      finalize(finalValue);
+    }
+
+    btnClose.addEventListener('click', close);
+    backdrop.addEventListener('mousedown', e => {
+      if (e.target === backdrop) close();
+    });
+    function onKeydown(e) {
+      if (e.key === 'Escape') close();
+    }
+    document.addEventListener('keydown', onKeydown);
+
+    body.focus();
+
+    openDescEditor = {
+      cleanup: () => {
+        clearTimeout(saveTimer);
+        document.removeEventListener('keydown', onKeydown);
+        backdrop.remove();
+      },
+    };
+  }
+
   function commitDraft() {
     if (!draft.name.trim()) return;
     TaskStore.add({ ...draft });
@@ -733,11 +836,16 @@ const UI = (() => {
     const tr = document.createElement('tr');
     tr.className = 'draft-row';
 
-    // Commit when focus leaves the entire row (tab-between-cells safe)
+    // Commit when focus leaves the entire row (tab-between-cells safe).
+    // Suppressed while the description editor is open for this row: that
+    // modal deliberately moves focus outside the row (its body lives in
+    // document.body, not inside td/tr), which would otherwise look like the
+    // user tabbed away and trigger a premature commit mid-edit.
     let blurTimer = null;
+    let descEditorOpenForDraft = false;
     tr.addEventListener('focusout', () => {
       blurTimer = setTimeout(() => {
-        if (!tr.contains(document.activeElement)) commitDraft();
+        if (!descEditorOpenForDraft && !tr.contains(document.activeElement)) commitDraft();
       }, 150);
     });
     tr.addEventListener('focusin', () => clearTimeout(blurTimer));
@@ -853,10 +961,30 @@ const UI = (() => {
             }
           };
           applyIconState();
-          // Prevent blur so a later click (Task 4 wires this up) won't
-          // commit the draft row prematurely (same idiom as the quadrant
-          // picker and topic combobox above).
+          // Prevent blur so clicking the icon doesn't commit the draft row
+          // prematurely (same idiom as the quadrant picker and topic
+          // combobox above).
           icon.addEventListener('mousedown', e => e.preventDefault());
+          icon.addEventListener('click', () => {
+            // The editor's body lives outside the row (document.body) and
+            // takes focus, which would otherwise arm the row's blur-commit
+            // safety net; suppress it for the duration of the editor session.
+            descEditorOpenForDraft = true;
+            openDescriptionEditor({
+              taskName: draft.name,
+              getState: () => ({ description: draft.description, history: draft.descriptionHistory, draft: draft.descriptionDraft }),
+              setDraft: value => { draft.descriptionDraft = value; applyIconState(); },
+              finalize: value => {
+                if (value !== draft.description) {
+                  draft.descriptionHistory = [draft.description, ...draft.descriptionHistory].slice(0, 2);
+                  draft.description = value;
+                }
+                draft.descriptionDraft = null;
+                descEditorOpenForDraft = false;
+                applyIconState();
+              },
+            });
+          });
           td.appendChild(icon);
           break;
         }
@@ -1161,6 +1289,31 @@ const UI = (() => {
               }
             };
             applyIconState(task);
+            icon.addEventListener('click', () => {
+              openDescriptionEditor({
+                taskName: task.name,
+                getState: () => {
+                  const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
+                  return { description: cur.description, history: cur.descriptionHistory, draft: cur.descriptionDraft };
+                },
+                setDraft: value => {
+                  TaskStore.update(task.uuid, 'descriptionDraft', value);
+                  FileManager.scheduleSave();
+                  applyIconState(TaskStore.getAll().find(x => x.uuid === task.uuid));
+                },
+                finalize: value => {
+                  const cur = TaskStore.getAll().find(x => x.uuid === task.uuid);
+                  if (value !== cur.description) {
+                    const newHistory = [cur.description, ...cur.descriptionHistory].slice(0, 2);
+                    TaskStore.update(task.uuid, 'descriptionHistory', newHistory);
+                    TaskStore.update(task.uuid, 'description', value);
+                  }
+                  TaskStore.update(task.uuid, 'descriptionDraft', null);
+                  FileManager.scheduleSave();
+                  applyIconState(TaskStore.getAll().find(x => x.uuid === task.uuid));
+                },
+              });
+            });
             td.appendChild(icon);
             break;
           }
@@ -1234,6 +1387,7 @@ const UI = (() => {
   function render() {
     closeQuadrantPicker(); // backstop: never leave a picker orphaned by a full re-render
     closeTopicCombobox();  // same backstop, for the topic combobox
+    closeDescriptionEditor(); // same backstop, for the description editor
     buildColgroup();
     buildHeaders();
     buildFilterRow();
