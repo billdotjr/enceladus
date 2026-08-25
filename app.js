@@ -432,14 +432,19 @@ function dateUrgencyColor(dateStr) {
 
 // ── Label colour (DJB2 hash → HSL) ─────────────────────────────────────────
 
-function labelColor(text) {
+function djb2Hue(text) {
   let h = 5381;
   for (let i = 0; i < text.length; i++) {
     h = ((h << 5) + h) ^ text.charCodeAt(i);
     h |= 0;
   }
-  return `hsl(${Math.abs(h) % 360}, 58%, 38%)`;
+  return Math.abs(h) % 360;
 }
+
+function labelColor(text) { return `hsl(${djb2Hue(text)}, 58%, 38%)`; }
+// Lighter variant for use as text colour (not a filled background) — legible
+// against both the light and dark theme's default background.
+function labelTextColor(text) { return `hsl(${djb2Hue(text)}, 60%, 48%)`; }
 
 // ── Description markdown ⇄ DOM (bold, links, line breaks only) ─────────────
 // Never uses innerHTML — all DOM built via createElement/textContent, so
@@ -1006,13 +1011,8 @@ const UI = (() => {
           td.className = 'cell-topic';
           const renderBadge = () => {
             td.textContent = draft.topic || '';
-            if (draft.topic) {
-              td.style.background = labelColor(draft.topic);
-              td.style.color = '#fff';
-            } else {
-              td.style.background = '';
-              td.style.color = '';
-            }
+            td.style.background = '';
+            td.style.color = draft.topic ? labelTextColor(draft.topic) : '';
           };
           renderBadge();
           // Prevent blur so the draft row isn't committed prematurely while
@@ -1333,13 +1333,8 @@ const UI = (() => {
             td.className = 'cell-topic';
             const applyBadge = t => {
               td.textContent = t.topic || '';
-              if (t.topic) {
-                td.style.background = labelColor(t.topic);
-                td.style.color = '#fff';
-              } else {
-                td.style.background = '';
-                td.style.color = '';
-              }
+              td.style.background = '';
+              td.style.color = t.topic ? labelTextColor(t.topic) : '';
             };
             applyBadge(task);
             td.addEventListener('click', () => {
