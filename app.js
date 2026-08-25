@@ -1151,6 +1151,46 @@ const UI = (() => {
     }
   }
 
+  // Next Action is the one column with NO specified width (see style.css) —
+  // under table-layout:fixed, that's what makes it the sole column that
+  // absorbs 100% of any leftover table width while every other, explicitly-
+  // sized column stays pinned exactly. (Giving Next Action's <col> an
+  // explicit width instead — even via JS — was tried and doesn't work: once
+  // it has ANY specified width, the browser treats it as "constrained" just
+  // like the others and goes back to redistributing the leftover/shortfall
+  // proportionally across every column, including Priority.)
+  //
+  // To bound how wide that leftover can get on very wide screens without
+  // touching the column itself, this instead caps the TABLE's own width:
+  // normally the table is width:100% (fills the wrapper, no dead space);
+  // once the natural leftover would exceed CAP, the table's width is pinned
+  // to "everything else + CAP" instead, which is narrower than the wrapper —
+  // Next Action then only ever grows to CAP, and the unused sliver of wrapper
+  // width past that is left blank rather than inflating any column.
+  function adjustNextActionColumnWidth() {
+    const wrapper = document.querySelector('#task-table')?.closest('.table-wrapper');
+    const table = document.getElementById('task-table');
+    const cols = document.querySelectorAll('#task-table colgroup col');
+    if (!wrapper || !table || !cols.length) return;
+    let othersSum = 0;
+    cols.forEach(c => {
+      if (!c.classList.contains('col-nextAction')) othersSum += c.getBoundingClientRect().width;
+    });
+    const CAP = 650, MIN = 150;
+    const naturalLeftover = wrapper.clientWidth - othersSum;
+    // Mirror the cap on the low end too — on a narrow window, forcing the
+    // table to "everything else + MIN" (wider than the wrapper) means Next
+    // Action never collapses to nothing; .table-wrapper's existing
+    // overflow-x:auto turns that into an ordinary horizontal scroll,
+    // consistent with how this table already behaves on narrow screens.
+    const tableWidth = naturalLeftover > CAP ? `${othersSum + CAP}px`
+      : naturalLeftover < MIN ? `${othersSum + MIN}px`
+      : '100%';
+    table.style.width = tableWidth;
+    const privateTable = document.getElementById('private-table');
+    if (privateTable) privateTable.style.width = tableWidth;
+  }
+
   function buildHeaders() {
     const { sortKey, sortDir } = SortController.getState();
     const row = document.getElementById('header-row');
@@ -1487,6 +1527,7 @@ const UI = (() => {
     buildFilterRow();
     const filtered = FilterController.apply(SortController.apply(TaskStore.getAll()));
     renderRows(filtered);
+    adjustNextActionColumnWidth();
   }
 
   function setBanner(name) {
@@ -1500,6 +1541,14 @@ const UI = (() => {
   function setSaveStatus(msg) {
     document.getElementById('save-status').textContent = msg;
   }
+
+  // Keep the Next Action column's leftover-space fill correct as the window
+  // is resized (debounced — no need to recompute on every intermediate frame).
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(adjustNextActionColumnWidth, 150);
+  });
 
   return { render, renderBody, setBanner, setSaveStatus, focusDraftName };
 })();

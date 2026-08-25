@@ -142,14 +142,16 @@ main { padding: 12px; overflow: hidden; display: flex; flex-direction: column; g
 }
 
 table {
-  /* Deliberately not 100%: with table-layout:fixed, a 100%-wide table
-     redistributes any leftover space (container wider than the sum of
-     column widths) proportionally across every column, including ones
-     meant to stay a fixed size. Sizing to "auto" instead makes the table
-     exactly as wide as its columns — no stretching, ever — and leaves
-     blank space on very wide screens rather than inflating columns.
-     .table-wrapper's overflow-x:auto keeps this safe on narrow screens. */
-  width: auto;
+  /* Every column below has an explicit width EXCEPT col-nextAction (see its
+     rule below) — under table-layout:fixed, that's what makes it the one
+     column that absorbs 100% of any leftover width while every other column
+     stays pinned exactly (giving it a width instead, even via JS, makes the
+     browser redistribute the leftover/shortfall across ALL columns again,
+     including Priority). To bound how wide that leftover can get on very
+     wide screens, JS (adjustNextActionColumnWidth in app.js) overrides this
+     table's own width — not the column's — once the natural leftover would
+     be excessive; see that function for the full explanation. */
+  width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -161,7 +163,7 @@ col.col-createdAt      { width: 135px; }
 col.col-dueDate        { width: 135px; }
 col.col-nextActionDate { width: 135px; }
 col.col-name           { width: 310px; }
-col.col-nextAction     { width: 400px; }
+/* col-nextAction: deliberately no width rule — see the table{} comment above */
 col.col-contact        { width: 115px; }
 col.col-topic           { width: 80px; }
 col.col-status         { width: 128px; }
