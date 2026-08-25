@@ -793,6 +793,52 @@ const UI = (() => {
     });
     toolbar.appendChild(btnLink);
 
+    const btnHistory = document.createElement('button');
+    btnHistory.type = 'button';
+    btnHistory.textContent = '🕐';
+    btnHistory.title = 'Version history';
+    let historyPopover = null;
+    function closeHistoryPopover() {
+      if (historyPopover) { historyPopover.remove(); historyPopover = null; }
+    }
+    btnHistory.addEventListener('mousedown', e => e.preventDefault());
+    btnHistory.addEventListener('click', () => {
+      if (historyPopover) { closeHistoryPopover(); return; }
+      const history = getState().history;
+      const pop = document.createElement('div');
+      pop.className = 'desc-history-popover';
+      if (!history.length) {
+        const empty = document.createElement('div');
+        empty.className = 'desc-history-empty';
+        empty.textContent = 'No previous versions yet';
+        pop.appendChild(empty);
+      } else {
+        history.forEach(value => {
+          const row = document.createElement('div');
+          row.className = 'desc-history-row';
+          const preview = document.createElement('span');
+          preview.className = 'desc-history-preview';
+          const plain = value.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\[(.+?)\]\(.+?\)/g, '$1');
+          preview.textContent = plain.slice(0, 40) || '(empty)';
+          row.appendChild(preview);
+          const btnRestore = document.createElement('button');
+          btnRestore.type = 'button';
+          btnRestore.textContent = 'Restore';
+          btnRestore.addEventListener('mousedown', e => e.preventDefault());
+          btnRestore.addEventListener('click', () => {
+            parseDescriptionToDOM(value, body);
+            setDraft(value);
+            closeHistoryPopover();
+          });
+          row.appendChild(btnRestore);
+          pop.appendChild(row);
+        });
+      }
+      toolbar.appendChild(pop);
+      historyPopover = pop;
+    });
+    toolbar.appendChild(btnHistory);
+
     const btnFullscreen = document.createElement('button');
     btnFullscreen.type = 'button';
     btnFullscreen.textContent = '⛶';
@@ -827,6 +873,8 @@ const UI = (() => {
       }, 500);
     }
     body.addEventListener('input', scheduleAutosave);
+    // Clicking back into the editing area closes an open history popover.
+    body.addEventListener('mousedown', closeHistoryPopover);
 
     function close() {
       clearTimeout(saveTimer);
