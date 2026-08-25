@@ -760,6 +760,39 @@ const UI = (() => {
     toolbar.className = 'desc-editor-toolbar';
     header.appendChild(toolbar);
 
+    const btnBold = document.createElement('button');
+    btnBold.type = 'button';
+    btnBold.textContent = 'B';
+    btnBold.style.fontWeight = '700';
+    btnBold.title = 'Bold (selection)';
+    // Prevent blur so clicking Bold doesn't collapse the text selection in
+    // `body` before execCommand runs.
+    btnBold.addEventListener('mousedown', e => e.preventDefault());
+    btnBold.addEventListener('click', () => {
+      body.focus();
+      document.execCommand('bold', false, null);
+      scheduleAutosave();
+    });
+    toolbar.appendChild(btnBold);
+
+    const btnLink = document.createElement('button');
+    btnLink.type = 'button';
+    btnLink.textContent = '🔗';
+    btnLink.title = 'Link (selection)';
+    btnLink.addEventListener('mousedown', e => e.preventDefault());
+    btnLink.addEventListener('click', () => {
+      const url = window.prompt('Link URL:');
+      if (!url) return;
+      if (!/^(https?:\/\/|mailto:)/i.test(url)) {
+        window.alert('Only http://, https://, or mailto: links are allowed.');
+        return;
+      }
+      body.focus();
+      document.execCommand('createLink', false, url);
+      scheduleAutosave();
+    });
+    toolbar.appendChild(btnLink);
+
     const btnFullscreen = document.createElement('button');
     btnFullscreen.type = 'button';
     btnFullscreen.textContent = '⛶';
