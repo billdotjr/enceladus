@@ -1151,51 +1151,84 @@ const UI = (() => {
     }
   }
 
-  // Next Action is the one column with NO specified width (see style.css) —
-  // under table-layout:fixed, that's what makes it the sole column that
-  // absorbs 100% of any leftover table width while every other, explicitly-
-  // sized column stays pinned exactly. (Giving Next Action's <col> an
-  // explicit width instead — even via JS — was tried and doesn't work: once
-  // it has ANY specified width, the browser treats it as "constrained" just
-  // like the others and goes back to redistributing the leftover/shortfall
-  // proportionally across every column, including Priority.)
-  //
-  // To bound how wide that leftover can get on very wide screens without
-  // touching the column itself, this instead caps the TABLE's own width:
-  // normally the table is width:100% (fills the wrapper, no dead space);
-  // once the natural leftover would exceed CAP, the table's width is pinned
-  // to "everything else + CAP" instead, which is narrower than the wrapper —
-  // Next Action then only ever grows to CAP, and the unused sliver of wrapper
-  // width past that is left blank rather than inflating any column.
-  function adjustNextActionColumnWidth() {
-    const wrapper = document.querySelector('#task-table')?.closest('.table-wrapper');
+  // ── Resizable columns ──────────────────────────────────────────────────
+  // Column widths are percentages of the table's own width, not pixels —
+  // since every column (including the trailing delete column) is given an
+  // explicit width and they sum to exactly 100%, table-layout:fixed has no
+  // leftover/shortfall to redistribute, so nothing ever gets stretched or
+  // shrunk by the browser. Proportions are therefore preserved automatically
+  // across any viewport size with zero JS recalculation needed on resize —
+  // pure CSS percentage math. Persisted to localStorage so a drag survives
+  // reloads; both tables (main + private) always mirror the same widths.
+  const COLUMN_WIDTHS_KEY = 'enceladus-column-widths';
+  const DEFAULT_COLUMN_WIDTHS = {
+    id: 2.3, priority: 4.8, createdAt: 9.8, dueDate: 9.8, topic: 5.8,
+    name: 22.6, nextActionDate: 9.8, nextAction: 15.3, contact: 8.4,
+    status: 9.3, del: 2.1,
+  };
+  const MIN_COLUMN_PCT = 2;
+
+  function loadColumnWidths() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(COLUMN_WIDTHS_KEY));
+      if (saved && typeof saved === 'object') return { ...DEFAULT_COLUMN_WIDTHS, ...saved };
+    } catch (e) { /* ignore malformed storage, fall through to defaults */ }
+    return { ...DEFAULT_COLUMN_WIDTHS };
+  }
+
+  function saveColumnWidths(widths) {
+    localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(widths));
+  }
+
+  function applyColumnWidths(widths) {
+    for (const id of ['task-table', 'private-table']) {
+      const tbl = document.getElementById(id);
+      for (const key of Object.keys(widths)) {
+        const col = tbl.querySelector(`col.col-${key}`);
+        if (col) col.style.width = `${widths[key]}%`;
+      }
+    }
+  }
+
+  // Dragging a column's handle trades width with the column immediately to
+  // its right (the classic spreadsheet resize model) — the sum stays 100%
+  // by construction, so no other column is ever affected.
+  function startColumnResize(e, colKey, nextColKey) {
+    e.preventDefault();
     const table = document.getElementById('task-table');
-    const cols = document.querySelectorAll('#task-table colgroup col');
-    if (!wrapper || !table || !cols.length) return;
-    let othersSum = 0;
-    cols.forEach(c => {
-      if (!c.classList.contains('col-nextAction')) othersSum += c.getBoundingClientRect().width;
-    });
-    const CAP = 650, MIN = 150;
-    const naturalLeftover = wrapper.clientWidth - othersSum;
-    // Mirror the cap on the low end too — on a narrow window, forcing the
-    // table to "everything else + MIN" (wider than the wrapper) means Next
-    // Action never collapses to nothing; .table-wrapper's existing
-    // overflow-x:auto turns that into an ordinary horizontal scroll,
-    // consistent with how this table already behaves on narrow screens.
-    const tableWidth = naturalLeftover > CAP ? `${othersSum + CAP}px`
-      : naturalLeftover < MIN ? `${othersSum + MIN}px`
-      : '100%';
-    table.style.width = tableWidth;
-    const privateTable = document.getElementById('private-table');
-    if (privateTable) privateTable.style.width = tableWidth;
+    const startX = e.clientX;
+    const tableWidth = table.getBoundingClientRect().width;
+    const widths = loadColumnWidths();
+    const startPct = widths[colKey];
+    const startNextPct = widths[nextColKey];
+    document.body.classList.add('col-resizing');
+
+    function onMouseMove(e2) {
+      const deltaPct = ((e2.clientX - startX) / tableWidth) * 100;
+      let newPct = startPct + deltaPct;
+      let newNextPct = startNextPct - deltaPct;
+      if (newPct < MIN_COLUMN_PCT) { newNextPct -= (MIN_COLUMN_PCT - newPct); newPct = MIN_COLUMN_PCT; }
+      if (newNextPct < MIN_COLUMN_PCT) { newPct -= (MIN_COLUMN_PCT - newNextPct); newNextPct = MIN_COLUMN_PCT; }
+      widths[colKey] = newPct;
+      widths[nextColKey] = newNextPct;
+      applyColumnWidths(widths);
+    }
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.classList.remove('col-resizing');
+      saveColumnWidths(widths);
+    }
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   }
 
   function buildHeaders() {
     const { sortKey, sortDir } = SortController.getState();
     const row = document.getElementById('header-row');
     row.innerHTML = '';
-    for (const col of COLUMNS) {
+    for (let i = 0; i < COLUMNS.length; i++) {
+      const col = COLUMNS[i];
       const th = document.createElement('th');
       th.textContent = col.label;
       if (col.sortable) {
@@ -1203,6 +1236,18 @@ const UI = (() => {
         th.addEventListener('click', () => SortController.toggle(col.key));
       } else {
         th.style.cursor = 'default';
+      }
+      // Resize handle: trades width with the next column, so the last data
+      // column (paired with the fixed, undraggable delete column) gets none.
+      if (i < COLUMNS.length - 1) {
+        const handle = document.createElement('span');
+        handle.className = 'col-resize-handle';
+        handle.addEventListener('click', e => e.stopPropagation()); // never trigger sort
+        handle.addEventListener('mousedown', e => {
+          e.stopPropagation();
+          startColumnResize(e, col.key, COLUMNS[i + 1].key);
+        });
+        th.appendChild(handle);
       }
       row.appendChild(th);
     }
@@ -1523,11 +1568,11 @@ const UI = (() => {
     closeTopicCombobox();  // same backstop, for the topic combobox
     closeDescriptionEditor(); // same backstop, for the description editor
     buildColgroup();
+    applyColumnWidths(loadColumnWidths());
     buildHeaders();
     buildFilterRow();
     const filtered = FilterController.apply(SortController.apply(TaskStore.getAll()));
     renderRows(filtered);
-    adjustNextActionColumnWidth();
   }
 
   function setBanner(name) {
@@ -1541,14 +1586,6 @@ const UI = (() => {
   function setSaveStatus(msg) {
     document.getElementById('save-status').textContent = msg;
   }
-
-  // Keep the Next Action column's leftover-space fill correct as the window
-  // is resized (debounced — no need to recompute on every intermediate frame).
-  let resizeTimer = null;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(adjustNextActionColumnWidth, 150);
-  });
 
   return { render, renderBody, setBanner, setSaveStatus, focusDraftName };
 })();

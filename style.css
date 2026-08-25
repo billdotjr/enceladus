@@ -142,35 +142,22 @@ main { padding: 12px; overflow: hidden; display: flex; flex-direction: column; g
 }
 
 table {
-  /* Every column below has an explicit width EXCEPT col-nextAction (see its
-     rule below) — under table-layout:fixed, that's what makes it the one
-     column that absorbs 100% of any leftover width while every other column
-     stays pinned exactly (giving it a width instead, even via JS, makes the
-     browser redistribute the leftover/shortfall across ALL columns again,
-     including Priority). To bound how wide that leftover can get on very
-     wide screens, JS (adjustNextActionColumnWidth in app.js) overrides this
-     table's own width — not the column's — once the natural leftover would
-     be excessive; see that function for the full explanation. */
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
 /* ── Column widths ────────────────────────────────────────── */
-col.col-id             { width: 32px; }
-col.col-priority       { width: 66px; }
-col.col-createdAt      { width: 135px; }
-col.col-dueDate        { width: 135px; }
-col.col-nextActionDate { width: 135px; }
-col.col-name           { width: 310px; }
-/* col-nextAction: deliberately no width rule — see the table{} comment above */
-col.col-contact        { width: 115px; }
-col.col-topic           { width: 80px; }
-col.col-status         { width: 128px; }
-col.col-del            { width: 28px; }
+/* Every <col> gets its width set via JS as a percentage (app.js:
+   applyColumnWidths/DEFAULT_COLUMN_WIDTHS) — user-resizable by dragging a
+   header's right edge, persisted to localStorage. All percentages always
+   sum to exactly 100%, so table-layout:fixed never has a leftover/shortfall
+   to redistribute, and proportions hold automatically across any viewport
+   size with no JS recalculation on resize. No widths are set here in CSS. */
 
 /* ── Header ───────────────────────────────────────────────── */
 thead tr th {
+  position: relative;
   background: var(--bg-header);
   color: var(--text);
   font-size: 12px;
@@ -187,6 +174,20 @@ thead tr:first-child th:hover { background: var(--bg-row-hover); }
 thead tr:first-child th.sorted-asc::after  { content: ' ▲'; font-size: 10px; opacity: 0.7; }
 thead tr:first-child th.sorted-desc::after { content: ' ▼'; font-size: 10px; opacity: 0.7; }
 th.th-del { cursor: default !important; text-align: center; padding: 0; }
+
+/* ── Column resize handle ─────────────────────────────────── */
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.col-resize-handle:hover { background: var(--accent); opacity: 0.5; }
+body.col-resizing { cursor: col-resize; user-select: none; }
+body.col-resizing .col-resize-handle { background: var(--accent); opacity: 0.6; }
 
 /* ── Filter row ───────────────────────────────────────────── */
 #filter-row th {

@@ -185,6 +185,10 @@ silently discarded or finalized) the next time that task's icon is clicked.
   status bar shows last-save timestamp with live "ago" suffix.
   On browsers without the File System Access API the Save button downloads `tasks.json`
   via a `blob:` URL instead (auto-save stays disabled)
+- **Column resize**: drag a header's right edge to resize it (trades width
+  with the next column); widths are percentages of the table, persisted to
+  `localStorage` (`enceladus-column-widths`) — proportions hold across any
+  window size and survive reloads
 - **Theme**: ☀ / ☾ button in topbar, persisted to `localStorage`
 - **Reopen**: last-used file handle stored in IndexedDB; offered as one-click reopen on startup
 
@@ -207,4 +211,3 @@ The date (`index.html`, `.app-version` element) must be updated manually after e
 - Undo / redo stack
 - Keyboard navigation between cells (Tab/Shift-Tab within a row)
 - Multi-select and bulk delete / bulk status change
-- Column resize by dragging
