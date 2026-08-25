@@ -80,6 +80,8 @@ const TaskStore = (() => {
       nextActionDate: '',
       name: '',
       description: '',
+      descriptionHistory: [],
+      descriptionDraft: null,
       nextAction: '',
       contact: '',
       topic: '',
@@ -103,6 +105,9 @@ const TaskStore = (() => {
         task.topic = privateLabel ? 'Private' : (task.labels[0] || '');
       }
       delete task.labels;
+      // Migrate: default the description-versioning fields if absent (purely additive).
+      if (task.descriptionHistory === undefined) task.descriptionHistory = [];
+      if (task.descriptionDraft === undefined) task.descriptionDraft = null;
       // Migrate old "Done" status to "Closed"
       if (task.status === 'Done') task.status = 'Closed';
       // Migrate missing createdAt; truncate old ISO datetime to date
@@ -438,7 +443,7 @@ function labelColor(text) {
 
 const UI = (() => {
   // ── Draft row (new task input) ────────────────────────────────────────────
-  const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', nextAction: '', contact: '', topic: '', status: 'New' });
+  const DRAFT_DEFAULTS = () => ({ important: false, urgent: false, createdAt: new Date().toISOString().slice(0, 10), dueDate: '', nextActionDate: '', name: '', description: '', descriptionHistory: [], descriptionDraft: null, nextAction: '', contact: '', topic: '', status: 'New' });
   let draft = DRAFT_DEFAULTS();
 
   // ── Quadrant picker (shared by draft row + existing rows) ────────────────
