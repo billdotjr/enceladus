@@ -382,6 +382,13 @@ const SortController = (() => {
       }
       if (av < bv) return -sortDir;
       if (av > bv) return  sortDir;
+      // Next Action tie: break by priority quadrant so more important tasks
+      // surface first; the tiebreak direction follows the same sortDir flip
+      // as the primary date comparison (reversed when the user reverses sort).
+      if (sortKey === 'nextActionDate') {
+        const ar = quadrantRank(a), br = quadrantRank(b);
+        if (ar !== br) return ar > br ? -sortDir : sortDir;
+      }
       return 0;
     });
   }

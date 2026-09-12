@@ -175,7 +175,9 @@ silently discarded or finalized) the next time that task's icon is clicked.
   without changing the value
 - **Delete**: trash icon per row (confirm dialog)
 - **Sort**: click column header → asc → desc → off; topic sorts alphabetically (plain string comparison).
-  Default sort on load: Next Action date ascending; tasks with no date sort last in either direction
+  Default sort on load: Next Action date ascending; tasks with no date sort last in either direction.
+  When sorting by Next Action date, tied dates (including two tasks with no date) break by priority
+  quadrant — more important first when ascending, flipping to less important first when descending
 - **Filter**: second header row with `<input>` per column; topic column shows datalist autocomplete;
   ✕ button at the end of the filter row resets all filters to the default (`status: !closed`)
 - **Refresh**: ↻ button in topbar resets sort and filters to defaults
